@@ -8,7 +8,7 @@ import {
   type Firestore
 } from "firebase/firestore";
 
-import { getFirebaseDb, getFirebaseUser } from "@/lib/firebase/config";
+import { getCurrentFirebaseUser, getFirebaseDb } from "@/lib/firebase/config";
 import { trackFirebaseEvent } from "@/services/firebase-analytics-service";
 import type {
   Achievement,
@@ -22,7 +22,7 @@ import type {
   ReminderSettings
 } from "@/types/hydration";
 
-const COLLECTION = "personal-hydration";
+const SETTINGS = "settings";
 const HYDRATION_LOGS = "hydration_logs";
 const DAILY_STATS = "daily_stats";
 const ACHIEVEMENTS = "achievements";
@@ -52,7 +52,7 @@ function toHydrationProfile(data: DocumentData | undefined): HydrationProfile | 
       days: data.days as Record<string, DailyHydration>,
       settings: { ...defaultSettings, ...data.settings },
       unlockedAchievements: data.unlockedAchievements ?? {},
-      ownerId: typeof data.ownerId === "string" ? data.ownerId : undefined,
+      userId: typeof data.userId === "string" ? data.userId : undefined,
       updatedAt: String(data.updatedAt ?? new Date().toISOString())
     };
   }
@@ -69,45 +69,45 @@ function toHydrationProfile(data: DocumentData | undefined): HydrationProfile | 
     },
     settings: defaultSettings,
     unlockedAchievements: {},
-    ownerId: undefined,
+    userId: undefined,
     updatedAt: new Date().toISOString()
   };
 }
 
-function dashboardDoc(db: Firestore, ownerId: string) {
-  return doc(db, COLLECTION, ownerId);
+function settingsDoc(db: Firestore, userId: string) {
+  return doc(db, SETTINGS, userId);
 }
 
-function withOwner<T extends object>(payload: T, ownerId: string) {
+function withUser<T extends object>(payload: T, userId: string) {
   return {
     ...payload,
-    ownerId
+    userId
   };
 }
 
 export async function loadHydrationProfile() {
   const db = getFirebaseDb();
 
-  const user = await getFirebaseUser();
+  const user = getCurrentFirebaseUser();
 
   if (!db || !user) {
     return null;
   }
 
-  const snapshot = await getDoc(dashboardDoc(db, user.uid));
+  const snapshot = await getDoc(settingsDoc(db, user.uid));
   return toHydrationProfile(snapshot.data());
 }
 
 export async function saveHydrationProfile(profile: HydrationProfile) {
   const db = getFirebaseDb();
 
-  const user = await getFirebaseUser();
+  const user = getCurrentFirebaseUser();
 
   if (!db || !user) {
     return;
   }
 
-  await setDoc(dashboardDoc(db, user.uid), withOwner(profile, user.uid), { merge: true });
+  await setDoc(settingsDoc(db, user.uid), withUser(profile, user.uid), { merge: true });
 }
 
 type SyncAnalyticsPayload = {
@@ -122,7 +122,7 @@ type SyncAnalyticsPayload = {
 export async function syncHydrationAnalytics(payload: SyncAnalyticsPayload) {
   const db = getFirebaseDb();
 
-  const user = await getFirebaseUser();
+  const user = getCurrentFirebaseUser();
 
   if (!db || !user) {
     return;
@@ -130,30 +130,30 @@ export async function syncHydrationAnalytics(payload: SyncAnalyticsPayload) {
 
   const batch = writeBatch(db);
 
-  batch.set(dashboardDoc(db, user.uid), withOwner(payload.profile, user.uid), {
+  batch.set(settingsDoc(db, user.uid), withUser(payload.profile, user.uid), {
     merge: true
   });
   batch.set(
     doc(collection(db, HYDRATION_LOGS), `${user.uid}_${payload.log.id}`),
-    withOwner(payload.log, user.uid)
+    withUser(payload.log, user.uid)
   );
   batch.set(
     doc(collection(db, DAILY_STATS), `${user.uid}_${payload.dailyStats.date}`),
-    withOwner(payload.dailyStats, user.uid),
+    withUser(payload.dailyStats, user.uid),
     {
       merge: true
     }
   );
   batch.set(
     doc(collection(db, STREAKS), user.uid),
-    withOwner(payload.streak, user.uid),
+    withUser(payload.streak, user.uid),
     {
       merge: true
     }
   );
   batch.set(
     doc(collection(db, MONTHLY_PROGRESS), `${user.uid}_${payload.monthlyProgress.month}`),
-    withOwner(payload.monthlyProgress, user.uid),
+    withUser(payload.monthlyProgress, user.uid),
     { merge: true }
   );
 
@@ -162,7 +162,7 @@ export async function syncHydrationAnalytics(payload: SyncAnalyticsPayload) {
       doc(collection(db, ACHIEVEMENTS), `${user.uid}_${achievement.id}`),
       {
         ...achievement,
-        ownerId: user.uid,
+        userId: user.uid,
         unlockedAt: achievement.unlockedAt ?? new Date().toISOString()
       },
       { merge: true }

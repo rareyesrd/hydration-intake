@@ -7,14 +7,22 @@ service cloud.firestore {
     }
 
     function ownsExisting() {
-      return signedIn() && resource.data.ownerId == request.auth.uid;
+      return signedIn() && resource.data.userId == request.auth.uid;
     }
 
     function ownsIncoming() {
-      return signedIn() && request.resource.data.ownerId == request.auth.uid;
+      return signedIn() && request.resource.data.userId == request.auth.uid;
     }
 
-    match /personal-hydration/{userId} {
+    match /users/{userId} {
+      allow read: if signedIn() && userId == request.auth.uid;
+      allow create, update: if signedIn()
+        && userId == request.auth.uid
+        && ownsIncoming();
+      allow delete: if false;
+    }
+
+    match /settings/{userId} {
       allow read: if signedIn() && userId == request.auth.uid;
       allow create, update: if signedIn()
         && userId == request.auth.uid
@@ -40,10 +48,10 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    match /streaks/{document} {
-      allow read: if signedIn() && document == request.auth.uid && ownsExisting();
+    match /streaks/{userId} {
+      allow read: if signedIn() && userId == request.auth.uid && ownsExisting();
       allow create, update: if signedIn()
-        && document == request.auth.uid
+        && userId == request.auth.uid
         && ownsIncoming();
       allow delete: if false;
     }

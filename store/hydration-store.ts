@@ -75,6 +75,7 @@ type HydrationState = HydrationProfile & {
   isSyncing: boolean;
   lastSyncedAt?: string;
   hasLoadedRemote: boolean;
+  setSessionUser: (userId: string | null) => void;
   addGlass: (amount?: number) => Promise<void>;
   removeGlass: () => Promise<void>;
   hydrateFromRemote: () => Promise<void>;
@@ -98,6 +99,22 @@ function createEmptyDay(date = todayKey()): DailyHydration {
     date,
     goal: DAILY_GOAL,
     entries: []
+  };
+}
+
+function createInitialProfile(userId?: string): Pick<
+  HydrationProfile,
+  "userId" | "goal" | "days" | "settings" | "unlockedAchievements" | "updatedAt"
+> {
+  return {
+    userId,
+    goal: DAILY_GOAL,
+    days: {
+      [todayKey()]: createEmptyDay()
+    },
+    settings: defaultSettings,
+    unlockedAchievements: {},
+    updatedAt: new Date().toISOString()
   };
 }
 
@@ -199,7 +216,7 @@ function getUnlockedAchievements(
 
 function buildProfileSnapshot(state: HydrationState): HydrationProfile {
   return {
-    ownerId: state.ownerId,
+    userId: state.userId,
     goal: state.goal,
     days: state.days,
     settings: state.settings,
@@ -435,17 +452,23 @@ export function calculateHydrationReminder(
 export const useHydrationStore = create<HydrationState>()(
   persist(
     (set, get) => ({
-      goal: DAILY_GOAL,
-      ownerId: undefined,
-      days: {
-        [todayKey()]: createEmptyDay()
-      },
-      settings: defaultSettings,
-      unlockedAchievements: {},
-      updatedAt: new Date().toISOString(),
+      ...createInitialProfile(),
       activeAchievement: null,
       isSyncing: false,
       hasLoadedRemote: false,
+      setSessionUser: (userId) => {
+        if (get().userId === userId) {
+          return;
+        }
+
+        set({
+          ...createInitialProfile(userId ?? undefined),
+          activeAchievement: null,
+          hasLoadedRemote: false,
+          isSyncing: false,
+          lastSyncedAt: undefined
+        });
+      },
       addGlass: async (amount = 1) => {
         const today = todaysDay(get().days);
         const cappedAmount = Math.min(amount, Math.max(0, today.goal - dayTotal(today)));

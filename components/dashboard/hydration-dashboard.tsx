@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Activity, RotateCcw, Sparkles, Target, Waves, Zap } from "lucide-react";
 
+import { ProfileMenu } from "@/components/auth/profile-menu";
 import { AnalyticsDashboard } from "@/components/analytics/analytics-dashboard";
 import { AchievementPopup } from "@/components/gamification/achievement-popup";
 import { AchievementStrip } from "@/components/gamification/achievement-strip";
@@ -22,6 +23,7 @@ import { useHydrationReminders } from "@/hooks/use-hydration-reminders";
 import { useDynamicCopy } from "@/hooks/use-dynamic-copy";
 import { useMounted } from "@/hooks/use-mounted";
 import { useThemePreference } from "@/hooks/use-theme-preference";
+import { useAuth } from "@/components/auth/auth-provider";
 import {
   calculateHydrationReminder,
   calculateHydrationHistory,
@@ -41,6 +43,8 @@ const messages = [
 
 export function HydrationDashboard() {
   const mounted = useMounted();
+  const { user } = useAuth();
+  const setSessionUser = useHydrationStore((state) => state.setSessionUser);
   const [now, setNow] = useState(() => new Date());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -84,13 +88,20 @@ export function HydrationDashboard() {
   const history = useMemo(() => calculateHydrationHistory(days), [days]);
   const reminder = useMemo(() => calculateHydrationReminder(day, now), [day, now]);
   const copy = useDynamicCopy(stats, reminder);
+  const firstName = user?.displayName?.split(" ")[0] ?? "Athlete";
 
   useHydrationReminders();
   useThemePreference(settings.theme);
 
   useEffect(() => {
-    void hydrateFromRemote();
-  }, [hydrateFromRemote]);
+    setSessionUser(user?.uid ?? null);
+  }, [setSessionUser, user?.uid]);
+
+  useEffect(() => {
+    if (user) {
+      void hydrateFromRemote();
+    }
+  }, [hydrateFromRemote, user]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(new Date()), 60_000);
@@ -144,16 +155,17 @@ export function HydrationDashboard() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-1 text-sm text-cyan-100 backdrop-blur-xl">
             <Sparkles className="size-4" />
-            {copy.greeting}
+            Welcome back, {firstName}
           </div>
           <h1 className="mt-4 max-w-3xl text-4xl font-black leading-[0.98] text-slate-950 dark:text-white sm:text-5xl lg:text-6xl">
             {copy.hero}
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-400">
-            {copy.caption}
+            {copy.caption} Your synced Google profile keeps every hydration record personal.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <ProfileMenu />
           <Button
             type="button"
             variant="ghost"

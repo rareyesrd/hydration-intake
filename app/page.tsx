@@ -1,5 +1,6 @@
-import { HydrationDashboard } from "@/components/dashboard/hydration-dashboard";
+import { redirect } from "next/navigation";
+import type { Route } from "next";
 
 export default function Home() {
-  return <HydrationDashboard />;
+  redirect("/dashboard" as Route);
 }

@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { AnimatedBackground } from "@/components/dashboard/animated-background";
+import { Providers } from "@/app/providers";
 import "./globals.css";
 
 const inter = Inter({
@@ -50,8 +51,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${inter.variable} ${jetBrainsMono.variable} antialiased`}>
-        <AnimatedBackground />
-        {children}
+        <Providers>
+          <AnimatedBackground />
+          {children}
+        </Providers>
       </body>
     </html>
   );
