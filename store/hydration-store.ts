@@ -1,11 +1,10 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { format, subDays } from "date-fns";
 
+import { logHydrationSync, logHydrationSyncError } from "@/lib/hydration-sync-log";
 import {
-  loadHydrationProfile,
   saveHydrationProfile,
   syncHydrationAnalytics
 } from "@/services/hydration-service";
@@ -70,23 +69,30 @@ const achievementCatalog: Achievement[] = [
   }
 ];
 
+type RemoteSyncStatus = "idle" | "loading" | "ready" | "error";
+
 type HydrationState = HydrationProfile & {
   activeAchievement: Achievement | null;
   isSyncing: boolean;
   lastSyncedAt?: string;
   hasLoadedRemote: boolean;
+  remoteSyncStatus: RemoteSyncStatus;
+  syncError: string | null;
   setSessionUser: (userId: string | null) => void;
+  beginRemoteSync: (userId: string) => void;
+  applyRemoteProfile: (profile: HydrationProfile | null) => void;
+  failRemoteSync: (message: string) => void;
+  clearRemoteSync: () => void;
   addGlass: (amount?: number) => Promise<void>;
   removeGlass: () => Promise<void>;
-  hydrateFromRemote: () => Promise<void>;
   resetToday: () => Promise<void>;
-  toggleSound: () => void;
-  setDailyGoal: (goal: number) => void;
-  setReminderFrequency: (minutes: number) => void;
-  setAnimationIntensity: (intensity: ReminderSettings["animationIntensity"]) => void;
-  setTheme: (theme: ReminderSettings["theme"]) => void;
-  setUnits: (units: ReminderSettings["units"]) => void;
-  completeOnboarding: () => void;
+  toggleSound: () => Promise<void>;
+  setDailyGoal: (goal: number) => Promise<void>;
+  setReminderFrequency: (minutes: number) => Promise<void>;
+  setAnimationIntensity: (intensity: ReminderSettings["animationIntensity"]) => Promise<void>;
+  setTheme: (theme: ReminderSettings["theme"]) => Promise<void>;
+  setUnits: (units: ReminderSettings["units"]) => Promise<void>;
+  completeOnboarding: () => Promise<void>;
   enableBrowserNotifications: () => Promise<void>;
   dismissAchievement: () => void;
   stats: () => HydrationStats;
@@ -214,26 +220,35 @@ function getUnlockedAchievements(
   return { unlocked, newlyUnlocked };
 }
 
+function normalizeDay(day: DailyHydration): DailyHydration {
+  const normalized: DailyHydration = {
+    date: day.date,
+    goal: day.goal,
+    entries: day.entries
+  };
+
+  if (day.completedAt) {
+    normalized.completedAt = day.completedAt;
+  }
+
+  return normalized;
+}
+
+function normalizeDays(days: Record<string, DailyHydration>) {
+  return Object.fromEntries(
+    Object.entries(days).map(([date, day]) => [date, normalizeDay(day)])
+  );
+}
+
 function buildProfileSnapshot(state: HydrationState): HydrationProfile {
   return {
     userId: state.userId,
     goal: state.goal,
-    days: state.days,
+    days: normalizeDays(state.days),
     settings: state.settings,
     unlockedAchievements: state.unlockedAchievements,
     updatedAt: new Date().toISOString()
   };
-}
-
-async function syncProfile(get: () => HydrationState, set: PartialSetter) {
-  set({ isSyncing: true });
-
-  try {
-    await saveHydrationProfile(buildProfileSnapshot(get()));
-    set({ isSyncing: false, lastSyncedAt: new Date().toISOString() });
-  } catch {
-    set({ isSyncing: false });
-  }
 }
 
 function bestStreak(days: Record<string, DailyHydration>) {
@@ -265,7 +280,7 @@ function buildDailyStats(day: DailyHydration): FirestoreDailyStats {
     goal: day.goal,
     completionPercentage,
     completed: consumed >= day.goal,
-    completedAt: day.completedAt,
+    ...(day.completedAt ? { completedAt: day.completedAt } : {}),
     hydrationPace: reminder.pace,
     updatedAt: new Date().toISOString()
   };
@@ -299,52 +314,65 @@ function buildMonthlyProgress(
   };
 }
 
-async function syncHydrationCollections(
-  get: () => HydrationState,
-  set: PartialSetter,
-  action: FirestoreHydrationLog["action"],
-  glassesDelta: number,
-  achievements: Achievement[] = []
+async function persistProfile(userId: string, profile: HydrationProfile, set: PartialSetter) {
+  set({ isSyncing: true, syncError: null });
+
+  try {
+    await saveHydrationProfile(userId, profile);
+    set({ isSyncing: false, lastSyncedAt: new Date().toISOString() });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to save hydration profile.";
+    logHydrationSyncError("write", message, error);
+    set({ isSyncing: false, syncError: message, remoteSyncStatus: "error" });
+    throw error;
+  }
+}
+
+async function persistHydrationAction(
+  userId: string,
+  profile: HydrationProfile,
+  log: FirestoreHydrationLog,
+  achievements: Achievement[],
+  set: PartialSetter
 ) {
-  const state = get();
-  const day = todaysDay(state.days);
+  const day = profile.days[todayKey()] ?? createEmptyDay();
   const dailyStats = buildDailyStats(day);
-  const log: FirestoreHydrationLog = {
-    id: `${day.date}-${Date.now()}-${action}`,
-    date: day.date,
-    timestamp: new Date().toISOString(),
-    action,
-    glassesDelta,
-    glassesConsumed: dailyStats.glassesConsumed,
-    completionPercentage: dailyStats.completionPercentage,
-    hydrationPace: dailyStats.hydrationPace,
-    reminderEffectiveness:
-      action === "add" && calculateHydrationReminder(day).shouldDrinkNow
-        ? "helped"
-        : "not-needed"
-  };
   const streak: FirestoreStreak = {
     id: "current",
-    currentStreak: calculateStreak(state.days),
-    bestStreak: bestStreak(state.days),
+    currentStreak: calculateStreak(profile.days),
+    bestStreak: bestStreak(profile.days),
     lastUpdatedAt: new Date().toISOString()
   };
 
-  set({ isSyncing: true });
+  set({ isSyncing: true, syncError: null });
 
   try {
-    await syncHydrationAnalytics({
-      profile: buildProfileSnapshot(state),
+    await syncHydrationAnalytics(userId, {
+      profile,
       log,
       dailyStats,
       streak,
-      monthlyProgress: buildMonthlyProgress(state.days),
+      monthlyProgress: buildMonthlyProgress(profile.days),
       achievements
     });
     set({ isSyncing: false, lastSyncedAt: new Date().toISOString() });
-  } catch {
-    set({ isSyncing: false });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to sync hydration analytics.";
+    logHydrationSyncError("write", message, error);
+    set({ isSyncing: false, syncError: message, remoteSyncStatus: "error" });
+    throw error;
   }
+}
+
+function requireUserId(userId: string | undefined): userId is string {
+  if (!userId) {
+    logHydrationSync("state", "Hydration mutation skipped because no user is signed in.");
+    return false;
+  }
+
+  return true;
 }
 
 type PartialSetter = (
@@ -416,7 +444,7 @@ export function calculateHydrationReminder(
       pace: "complete",
       expectedGlasses,
       deficit: 0,
-          nextReminderMinutes: Math.max(120, day.goal * 12),
+      nextReminderMinutes: Math.max(120, day.goal * 12),
       shouldDrinkNow: false,
       forecastGlasses: consumed,
       forecastLabel: "Goal complete. Maintenance reminders only."
@@ -449,241 +477,424 @@ export function calculateHydrationReminder(
   };
 }
 
-export const useHydrationStore = create<HydrationState>()(
-  persist(
-    (set, get) => ({
-      ...createInitialProfile(),
-      activeAchievement: null,
-      isSyncing: false,
-      hasLoadedRemote: false,
-      setSessionUser: (userId) => {
-        if (get().userId === userId) {
-          return;
-        }
-
-        set({
-          ...createInitialProfile(userId ?? undefined),
-          activeAchievement: null,
-          hasLoadedRemote: false,
-          isSyncing: false,
-          lastSyncedAt: undefined
-        });
-      },
-      addGlass: async (amount = 1) => {
-        const today = todaysDay(get().days);
-        const cappedAmount = Math.min(amount, Math.max(0, today.goal - dayTotal(today)));
-
-        if (cappedAmount <= 0) {
-          return;
-        }
-
-        const nextDay = {
-          ...today,
-          entries: [...today.entries, buildEntry(cappedAmount)]
-        };
-
-        if (dayTotal(nextDay) >= nextDay.goal && !nextDay.completedAt) {
-          nextDay.completedAt = new Date().toISOString();
-        }
-
-        const nextDays = { ...get().days, [todayKey()]: nextDay };
-        const { unlocked, newlyUnlocked } = getUnlockedAchievements(
-          nextDays,
-          get().unlockedAchievements
-        );
-
-        set({
-          days: nextDays,
-          unlockedAchievements: unlocked,
-          activeAchievement: newlyUnlocked[0] ?? null,
-          updatedAt: new Date().toISOString()
-        });
-
-        void syncHydrationCollections(get, set, "add", cappedAmount, newlyUnlocked);
-      },
-      removeGlass: async () => {
-        const today = todaysDay(get().days);
-
-        if (!today.entries.length) {
-          return;
-        }
-
-        const nextEntries = today.entries.slice(0, -1);
-        const nextDay = {
-          ...today,
-          entries: nextEntries,
-          completedAt:
-            dayTotal({ ...today, entries: nextEntries }) >= today.goal
-              ? today.completedAt
-              : undefined
-        };
-
-        set({
-          days: { ...get().days, [todayKey()]: nextDay },
-          updatedAt: new Date().toISOString()
-        });
-
-        void syncHydrationCollections(get, set, "remove", -1);
-      },
-      hydrateFromRemote: async () => {
-        if (get().hasLoadedRemote) {
-          return;
-        }
-
-        set({ isSyncing: true });
-
-        try {
-          const remoteProfile = await loadHydrationProfile();
-
-          if (remoteProfile) {
-            set({
-              ...remoteProfile,
-              days: {
-                ...remoteProfile.days,
-                [todayKey()]: remoteProfile.days[todayKey()] ?? createEmptyDay()
-              }
-            });
-          }
-        } finally {
-          set({ hasLoadedRemote: true, isSyncing: false });
-        }
-      },
-      resetToday: async () => {
-        set({
-          days: { ...get().days, [todayKey()]: createEmptyDay() },
-          updatedAt: new Date().toISOString()
-        });
-
-        void syncHydrationCollections(get, set, "reset", 0);
-      },
-      toggleSound: () => {
-        set({
-          settings: {
-            ...get().settings,
-            soundEnabled: !get().settings.soundEnabled
-          }
-        });
-        void syncProfile(get, set);
-      },
-      setDailyGoal: (goal) => {
-        const safeGoal = Math.min(24, Math.max(1, Math.round(goal)));
-        const today = todaysDay(get().days);
-
-        set({
-          goal: safeGoal,
-          days: {
-            ...get().days,
-            [todayKey()]: {
-              ...today,
-              goal: safeGoal,
-              completedAt:
-                dayTotal(today) >= safeGoal
-                  ? today.completedAt ?? new Date().toISOString()
-                  : undefined
-            }
-          },
-          updatedAt: new Date().toISOString()
-        });
-
-        void syncProfile(get, set);
-      },
-      setReminderFrequency: (minutes) => {
-        set({
-          settings: {
-            ...get().settings,
-            reminderFrequencyMinutes: Math.min(180, Math.max(15, Math.round(minutes)))
-          }
-        });
-        void syncProfile(get, set);
-      },
-      setAnimationIntensity: (animationIntensity) => {
-        set({
-          settings: {
-            ...get().settings,
-            animationIntensity
-          }
-        });
-        void syncProfile(get, set);
-      },
-      setTheme: (theme) => {
-        set({
-          settings: {
-            ...get().settings,
-            theme
-          }
-        });
-        void syncProfile(get, set);
-      },
-      setUnits: (units) => {
-        set({
-          settings: {
-            ...get().settings,
-            units
-          }
-        });
-        void syncProfile(get, set);
-      },
-      completeOnboarding: () => {
-        set({
-          settings: {
-            ...get().settings,
-            hasCompletedOnboarding: true
-          }
-        });
-        void syncProfile(get, set);
-      },
-      enableBrowserNotifications: async () => {
-        if (!("Notification" in window)) {
-          return;
-        }
-
-        const permission = await Notification.requestPermission();
-
-        set({
-          settings: {
-            ...get().settings,
-            browserNotificationsEnabled: permission === "granted"
-          }
-        });
-
-        void syncProfile(get, set);
-      },
-      dismissAchievement: () => set({ activeAchievement: null }),
-      stats: () =>
-        calculateHydrationStats(
-          todaysDay(get().days),
-          get().days,
-          get().unlockedAchievements
-        ),
-      history: () => calculateHydrationHistory(get().days),
-      reminder: (now = new Date()) =>
-        calculateHydrationReminder(todaysDay(get().days), now)
-    }),
-    {
-      name: "hydration-athlete-store",
-      merge: (persisted, current) => {
-        const persistedState = persisted as Partial<HydrationState> | undefined;
-
-        return {
-          ...current,
-          ...persistedState,
-          settings: {
-            ...current.settings,
-            ...persistedState?.settings
-          },
-          days: {
-            ...current.days,
-            ...persistedState?.days
-          }
-        };
-      },
-      partialize: (state) => ({
-        goal: state.goal,
-        days: state.days,
-        settings: state.settings,
-        unlockedAchievements: state.unlockedAchievements,
-        updatedAt: state.updatedAt
-      })
+export const useHydrationStore = create<HydrationState>()((set, get) => ({
+  ...createInitialProfile(),
+  activeAchievement: null,
+  isSyncing: false,
+  hasLoadedRemote: false,
+  remoteSyncStatus: "idle",
+  syncError: null,
+  setSessionUser: (userId) => {
+    if (get().userId === userId) {
+      return;
     }
-  )
-);
+
+    logHydrationSync("auth", `Hydration session user changed`, {
+      previousUserId: get().userId ?? null,
+      nextUserId: userId
+    });
+
+    if (!userId) {
+      set({
+        ...createInitialProfile(),
+        activeAchievement: null,
+        hasLoadedRemote: false,
+        isSyncing: false,
+        lastSyncedAt: undefined,
+        remoteSyncStatus: "idle",
+        syncError: null
+      });
+      return;
+    }
+
+    set({
+      ...createInitialProfile(userId),
+      activeAchievement: null,
+      hasLoadedRemote: false,
+      isSyncing: false,
+      lastSyncedAt: undefined,
+      remoteSyncStatus: "loading",
+      syncError: null
+    });
+  },
+  beginRemoteSync: (userId) => {
+    if (get().userId !== userId) {
+      get().setSessionUser(userId);
+      return;
+    }
+
+    set({
+      remoteSyncStatus: "loading",
+      syncError: null
+    });
+  },
+  applyRemoteProfile: (profile) => {
+    const userId = get().userId;
+
+    if (!userId) {
+      return;
+    }
+
+    if (!profile) {
+      logHydrationSync("state", `No remote hydration profile yet for ${userId}`);
+      set({
+        ...createInitialProfile(userId),
+        hasLoadedRemote: true,
+        remoteSyncStatus: "ready",
+        syncError: null
+      });
+      return;
+    }
+
+    logHydrationSync("state", `Applying remote hydration profile for ${userId}`, {
+      dayCount: Object.keys(profile.days).length,
+      updatedAt: profile.updatedAt
+    });
+
+    set({
+      userId,
+      goal: profile.goal,
+      days: {
+        ...profile.days,
+        [todayKey()]: profile.days[todayKey()] ?? createEmptyDay()
+      },
+      settings: profile.settings,
+      unlockedAchievements: profile.unlockedAchievements,
+      updatedAt: profile.updatedAt,
+      hasLoadedRemote: true,
+      remoteSyncStatus: "ready",
+      syncError: null
+    });
+  },
+  failRemoteSync: (message) => {
+    logHydrationSyncError("error", "Remote hydration sync failed", message);
+    set({
+      remoteSyncStatus: "error",
+      syncError: message,
+      hasLoadedRemote: true
+    });
+  },
+  clearRemoteSync: () => {
+    set({
+      hasLoadedRemote: false,
+      remoteSyncStatus: "idle",
+      syncError: null,
+      isSyncing: false,
+      lastSyncedAt: undefined
+    });
+  },
+  addGlass: async (amount = 1) => {
+    const state = get();
+    const userId = state.userId;
+
+    if (!requireUserId(userId)) {
+      return;
+    }
+
+    const today = todaysDay(state.days);
+    const cappedAmount = Math.min(amount, Math.max(0, today.goal - dayTotal(today)));
+
+    if (cappedAmount <= 0) {
+      return;
+    }
+
+    const nextDay = {
+      ...today,
+      entries: [...today.entries, buildEntry(cappedAmount)]
+    };
+
+    if (dayTotal(nextDay) >= nextDay.goal && !nextDay.completedAt) {
+      nextDay.completedAt = new Date().toISOString();
+    }
+
+    const nextDays = { ...state.days, [todayKey()]: nextDay };
+    const { unlocked, newlyUnlocked } = getUnlockedAchievements(
+      nextDays,
+      state.unlockedAchievements
+    );
+    set({
+      days: nextDays,
+      unlockedAchievements: unlocked,
+      updatedAt: new Date().toISOString()
+    });
+
+    const nextProfile = buildProfileSnapshot(get());
+
+    await persistHydrationAction(
+      userId,
+      nextProfile,
+      {
+        id: `${nextDay.date}-${Date.now()}-add`,
+        date: nextDay.date,
+        timestamp: new Date().toISOString(),
+        action: "add",
+        glassesDelta: cappedAmount,
+        glassesConsumed: buildDailyStats(nextDay).glassesConsumed,
+        completionPercentage: buildDailyStats(nextDay).completionPercentage,
+        hydrationPace: buildDailyStats(nextDay).hydrationPace,
+        reminderEffectiveness:
+          calculateHydrationReminder(nextDay).shouldDrinkNow ? "helped" : "not-needed"
+      },
+      newlyUnlocked,
+      set
+    );
+
+    if (newlyUnlocked[0]) {
+      set({ activeAchievement: newlyUnlocked[0] });
+    }
+  },
+  removeGlass: async () => {
+    const state = get();
+    const userId = state.userId;
+
+    if (!requireUserId(userId)) {
+      return;
+    }
+
+    const today = todaysDay(state.days);
+
+    if (!today.entries.length) {
+      return;
+    }
+
+    const nextEntries = today.entries.slice(0, -1);
+    const nextDay = normalizeDay({
+      ...today,
+      entries: nextEntries,
+      completedAt:
+        dayTotal({ ...today, entries: nextEntries }) >= today.goal
+          ? today.completedAt
+          : undefined
+    });
+    const nextDays = { ...state.days, [todayKey()]: nextDay };
+
+    set({
+      days: nextDays,
+      updatedAt: new Date().toISOString()
+    });
+
+    const nextProfile = buildProfileSnapshot(get());
+
+    await persistHydrationAction(
+      userId,
+      nextProfile,
+      {
+        id: `${nextDay.date}-${Date.now()}-remove`,
+        date: nextDay.date,
+        timestamp: new Date().toISOString(),
+        action: "remove",
+        glassesDelta: -1,
+        glassesConsumed: buildDailyStats(nextDay).glassesConsumed,
+        completionPercentage: buildDailyStats(nextDay).completionPercentage,
+        hydrationPace: buildDailyStats(nextDay).hydrationPace
+      },
+      [],
+      set
+    );
+  },
+  resetToday: async () => {
+    const state = get();
+    const userId = state.userId;
+
+    if (!requireUserId(userId)) {
+      return;
+    }
+
+    const nextDays = { ...state.days, [todayKey()]: createEmptyDay() };
+
+    set({
+      days: nextDays,
+      updatedAt: new Date().toISOString()
+    });
+
+    const nextProfile = buildProfileSnapshot(get());
+
+    await persistHydrationAction(
+      userId,
+      nextProfile,
+      {
+        id: `${todayKey()}-${Date.now()}-reset`,
+        date: todayKey(),
+        timestamp: new Date().toISOString(),
+        action: "reset",
+        glassesDelta: 0,
+        glassesConsumed: 0,
+        completionPercentage: 0,
+        hydrationPace: calculateHydrationReminder(createEmptyDay()).pace
+      },
+      [],
+      set
+    );
+  },
+  toggleSound: async () => {
+    const state = get();
+    const userId = state.userId;
+
+    if (!requireUserId(userId)) {
+      return;
+    }
+
+    set({
+      settings: {
+        ...state.settings,
+        soundEnabled: !state.settings.soundEnabled
+      },
+      updatedAt: new Date().toISOString()
+    });
+
+    await persistProfile(userId, buildProfileSnapshot(get()), set);
+  },
+  setDailyGoal: async (goal) => {
+    const state = get();
+    const userId = state.userId;
+
+    if (!requireUserId(userId)) {
+      return;
+    }
+
+    const safeGoal = Math.min(24, Math.max(1, Math.round(goal)));
+    const today = todaysDay(state.days);
+    const nextDay = normalizeDay({
+      ...today,
+      goal: safeGoal,
+      completedAt:
+        dayTotal(today) >= safeGoal
+          ? today.completedAt ?? new Date().toISOString()
+          : undefined
+    });
+
+    set({
+      goal: safeGoal,
+      days: {
+        ...state.days,
+        [todayKey()]: nextDay
+      },
+      updatedAt: new Date().toISOString()
+    });
+
+    await persistProfile(userId, buildProfileSnapshot(get()), set);
+  },
+  setReminderFrequency: async (minutes) => {
+    const state = get();
+    const userId = state.userId;
+
+    if (!requireUserId(userId)) {
+      return;
+    }
+
+    set({
+      settings: {
+        ...state.settings,
+        reminderFrequencyMinutes: Math.min(180, Math.max(15, Math.round(minutes)))
+      },
+      updatedAt: new Date().toISOString()
+    });
+
+    await persistProfile(userId, buildProfileSnapshot(get()), set);
+  },
+  setAnimationIntensity: async (animationIntensity) => {
+    const state = get();
+    const userId = state.userId;
+
+    if (!requireUserId(userId)) {
+      return;
+    }
+
+    set({
+      settings: {
+        ...state.settings,
+        animationIntensity
+      },
+      updatedAt: new Date().toISOString()
+    });
+
+    await persistProfile(userId, buildProfileSnapshot(get()), set);
+  },
+  setTheme: async (theme) => {
+    const state = get();
+    const userId = state.userId;
+
+    if (!requireUserId(userId)) {
+      return;
+    }
+
+    set({
+      settings: {
+        ...state.settings,
+        theme
+      },
+      updatedAt: new Date().toISOString()
+    });
+
+    await persistProfile(userId, buildProfileSnapshot(get()), set);
+  },
+  setUnits: async (units) => {
+    const state = get();
+    const userId = state.userId;
+
+    if (!requireUserId(userId)) {
+      return;
+    }
+
+    set({
+      settings: {
+        ...state.settings,
+        units
+      },
+      updatedAt: new Date().toISOString()
+    });
+
+    await persistProfile(userId, buildProfileSnapshot(get()), set);
+  },
+  completeOnboarding: async () => {
+    const state = get();
+    const userId = state.userId;
+
+    if (!requireUserId(userId)) {
+      return;
+    }
+
+    set({
+      settings: {
+        ...state.settings,
+        hasCompletedOnboarding: true
+      },
+      updatedAt: new Date().toISOString()
+    });
+
+    await persistProfile(userId, buildProfileSnapshot(get()), set);
+  },
+  enableBrowserNotifications: async () => {
+    const state = get();
+    const userId = state.userId;
+
+    if (!requireUserId(userId)) {
+      return;
+    }
+
+    if (!("Notification" in window)) {
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+
+    set({
+      settings: {
+        ...state.settings,
+        browserNotificationsEnabled: permission === "granted"
+      },
+      updatedAt: new Date().toISOString()
+    });
+
+    await persistProfile(userId, buildProfileSnapshot(get()), set);
+  },
+  dismissAchievement: () => set({ activeAchievement: null }),
+  stats: () =>
+    calculateHydrationStats(
+      todaysDay(get().days),
+      get().days,
+      get().unlockedAchievements
+    ),
+  history: () => calculateHydrationHistory(get().days),
+  reminder: (now = new Date()) => calculateHydrationReminder(todaysDay(get().days), now)
+}));
