@@ -2,13 +2,20 @@ import {
   collection,
   doc,
   getDoc,
+  onSnapshot,
   setDoc,
   writeBatch,
   type DocumentData,
-  type Firestore
+  type Firestore,
+  type Unsubscribe
 } from "firebase/firestore";
 
-import { getCurrentFirebaseUser, getFirebaseDb } from "@/lib/firebase/config";
+import { getFirebaseDb } from "@/lib/firebase/config";
+import { sanitizeForFirestore } from "@/lib/firestore-sanitize";
+import {
+  logHydrationSync,
+  logHydrationSyncError
+} from "@/lib/hydration-sync-log";
 import { trackFirebaseEvent } from "@/services/firebase-analytics-service";
 import type {
   Achievement,
@@ -28,6 +35,7 @@ const DAILY_STATS = "daily_stats";
 const ACHIEVEMENTS = "achievements";
 const STREAKS = "streaks";
 const MONTHLY_PROGRESS = "monthly_progress";
+
 const defaultSettings: ReminderSettings = {
   enabled: true,
   soundEnabled: false,
@@ -41,7 +49,32 @@ const defaultSettings: ReminderSettings = {
   quietHoursEnd: 7
 };
 
-function toHydrationProfile(data: DocumentData | undefined): HydrationProfile | null {
+export class HydrationPersistenceError extends Error {
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = "HydrationPersistenceError";
+    this.cause = cause;
+  }
+}
+
+function requireFirestore(userId: string) {
+  const db = getFirebaseDb();
+
+  if (!db) {
+    throw new HydrationPersistenceError("Firestore is not configured.");
+  }
+
+  if (!userId) {
+    throw new HydrationPersistenceError("Cannot sync hydration without a user id.");
+  }
+
+  return db;
+}
+
+function toHydrationProfile(
+  userId: string,
+  data: DocumentData | undefined
+): HydrationProfile | null {
   if (!data) {
     return null;
   }
@@ -52,7 +85,7 @@ function toHydrationProfile(data: DocumentData | undefined): HydrationProfile | 
       days: data.days as Record<string, DailyHydration>,
       settings: { ...defaultSettings, ...data.settings },
       unlockedAchievements: data.unlockedAchievements ?? {},
-      userId: typeof data.userId === "string" ? data.userId : undefined,
+      userId,
       updatedAt: String(data.updatedAt ?? new Date().toISOString())
     };
   }
@@ -69,7 +102,7 @@ function toHydrationProfile(data: DocumentData | undefined): HydrationProfile | 
     },
     settings: defaultSettings,
     unlockedAchievements: {},
-    userId: undefined,
+    userId,
     updatedAt: new Date().toISOString()
   };
 }
@@ -79,35 +112,43 @@ function settingsDoc(db: Firestore, userId: string) {
 }
 
 function withUser<T extends object>(payload: T, userId: string) {
-  return {
+  return sanitizeForFirestore({
     ...payload,
     userId
-  };
+  });
 }
 
-export async function loadHydrationProfile() {
-  const db = getFirebaseDb();
+export async function loadHydrationProfile(userId: string) {
+  const db = requireFirestore(userId);
 
-  const user = getCurrentFirebaseUser();
+  logHydrationSync("read", `Loading hydration profile for ${userId}`);
+  const snapshot = await getDoc(settingsDoc(db, userId));
+  const profile = toHydrationProfile(userId, snapshot.data());
 
-  if (!db || !user) {
-    return null;
-  }
+  logHydrationSync("read", `Hydration profile loaded`, {
+    userId,
+    exists: snapshot.exists(),
+    dayCount: profile ? Object.keys(profile.days).length : 0
+  });
 
-  const snapshot = await getDoc(settingsDoc(db, user.uid));
-  return toHydrationProfile(snapshot.data());
+  return profile;
 }
 
-export async function saveHydrationProfile(profile: HydrationProfile) {
-  const db = getFirebaseDb();
+export async function saveHydrationProfile(userId: string, profile: HydrationProfile) {
+  const db = requireFirestore(userId);
 
-  const user = getCurrentFirebaseUser();
+  logHydrationSync("write", `Saving hydration profile for ${userId}`, {
+    dayCount: Object.keys(profile.days).length,
+    updatedAt: profile.updatedAt
+  });
 
-  if (!db || !user) {
-    return;
+  try {
+    await setDoc(settingsDoc(db, userId), withUser(profile, userId), { merge: true });
+    logHydrationSync("write", `Hydration profile saved for ${userId}`);
+  } catch (error) {
+    logHydrationSyncError("write", `Failed to save hydration profile for ${userId}`, error);
+    throw new HydrationPersistenceError("Failed to save hydration profile.", error);
   }
-
-  await setDoc(settingsDoc(db, user.uid), withUser(profile, user.uid), { merge: true });
 }
 
 type SyncAnalyticsPayload = {
@@ -119,57 +160,68 @@ type SyncAnalyticsPayload = {
   achievements?: Achievement[];
 };
 
-export async function syncHydrationAnalytics(payload: SyncAnalyticsPayload) {
-  const db = getFirebaseDb();
+export async function syncHydrationAnalytics(
+  userId: string,
+  payload: SyncAnalyticsPayload
+) {
+  const db = requireFirestore(userId);
 
-  const user = getCurrentFirebaseUser();
-
-  if (!db || !user) {
-    return;
-  }
+  logHydrationSync("write", `Syncing hydration analytics for ${userId}`, {
+    action: payload.log.action,
+    glassesDelta: payload.log.glassesDelta,
+    date: payload.log.date
+  });
 
   const batch = writeBatch(db);
 
-  batch.set(settingsDoc(db, user.uid), withUser(payload.profile, user.uid), {
+  batch.set(settingsDoc(db, userId), withUser(payload.profile, userId), {
     merge: true
   });
   batch.set(
-    doc(collection(db, HYDRATION_LOGS), `${user.uid}_${payload.log.id}`),
-    withUser(payload.log, user.uid)
+    doc(collection(db, HYDRATION_LOGS), `${userId}_${payload.log.id}`),
+    withUser(payload.log, userId)
   );
   batch.set(
-    doc(collection(db, DAILY_STATS), `${user.uid}_${payload.dailyStats.date}`),
-    withUser(payload.dailyStats, user.uid),
+    doc(collection(db, DAILY_STATS), `${userId}_${payload.dailyStats.date}`),
+    withUser(payload.dailyStats, userId),
     {
       merge: true
     }
   );
+  batch.set(doc(collection(db, STREAKS), userId), withUser(payload.streak, userId), {
+    merge: true
+  });
   batch.set(
-    doc(collection(db, STREAKS), user.uid),
-    withUser(payload.streak, user.uid),
-    {
-      merge: true
-    }
-  );
-  batch.set(
-    doc(collection(db, MONTHLY_PROGRESS), `${user.uid}_${payload.monthlyProgress.month}`),
-    withUser(payload.monthlyProgress, user.uid),
+    doc(collection(db, MONTHLY_PROGRESS), `${userId}_${payload.monthlyProgress.month}`),
+    withUser(payload.monthlyProgress, userId),
     { merge: true }
   );
 
   payload.achievements?.forEach((achievement) => {
     batch.set(
-      doc(collection(db, ACHIEVEMENTS), `${user.uid}_${achievement.id}`),
+      doc(collection(db, ACHIEVEMENTS), `${userId}_${achievement.id}`),
       {
         ...achievement,
-        userId: user.uid,
+        userId,
         unlockedAt: achievement.unlockedAt ?? new Date().toISOString()
       },
       { merge: true }
     );
   });
 
-  await batch.commit();
+  try {
+    await batch.commit();
+    logHydrationSync("write", `Hydration analytics batch committed for ${userId}`, {
+      action: payload.log.action
+    });
+  } catch (error) {
+    logHydrationSyncError(
+      "write",
+      `Hydration analytics batch failed for ${userId}`,
+      error
+    );
+    throw new HydrationPersistenceError("Failed to sync hydration analytics.", error);
+  }
 
   await trackFirebaseEvent("hydration_log", {
     action: payload.log.action,
@@ -187,4 +239,41 @@ export async function trackReminderEffectiveness(
     hydration_pace: pace,
     helped
   });
+}
+
+export function subscribeHydrationProfile(
+  userId: string,
+  handlers: {
+    onProfile: (profile: HydrationProfile | null) => void;
+    onError: (error: Error) => void;
+  }
+): Unsubscribe {
+  const db = requireFirestore(userId);
+
+  logHydrationSync("snapshot", `Subscribing to hydration profile for ${userId}`);
+
+  return onSnapshot(
+    settingsDoc(db, userId),
+    (snapshot) => {
+      const profile = toHydrationProfile(userId, snapshot.data());
+
+      logHydrationSync("snapshot", `Hydration profile snapshot received`, {
+        userId,
+        exists: snapshot.exists(),
+        fromCache: snapshot.metadata.fromCache,
+        hasPendingWrites: snapshot.metadata.hasPendingWrites,
+        dayCount: profile ? Object.keys(profile.days).length : 0
+      });
+
+      handlers.onProfile(profile);
+    },
+    (error) => {
+      logHydrationSyncError(
+        "snapshot",
+        `Hydration profile snapshot failed for ${userId}`,
+        error
+      );
+      handlers.onError(error);
+    }
+  );
 }
