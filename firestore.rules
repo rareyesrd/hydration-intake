@@ -2,28 +2,60 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsExisting() {
+      return signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    function ownsIncoming() {
+      return signedIn() && request.resource.data.ownerId == request.auth.uid;
+    }
+
+    match /personal-hydration/{userId} {
+      allow read: if signedIn() && userId == request.auth.uid;
+      allow create, update: if signedIn()
+        && userId == request.auth.uid
+        && ownsIncoming();
+      allow delete: if false;
+    }
+
     match /hydration_logs/{document} {
-      allow read, write: if true;
+      allow read: if ownsExisting();
+      allow create: if ownsIncoming();
+      allow update, delete: if false;
     }
 
     match /daily_stats/{document} {
-      allow read, write: if true;
+      allow read: if ownsExisting();
+      allow create, update: if ownsIncoming();
+      allow delete: if false;
     }
 
     match /achievements/{document} {
-      allow read, write: if true;
+      allow read: if ownsExisting();
+      allow create, update: if ownsIncoming();
+      allow delete: if false;
     }
 
     match /streaks/{document} {
-      allow read, write: if true;
+      allow read: if signedIn() && document == request.auth.uid && ownsExisting();
+      allow create, update: if signedIn()
+        && document == request.auth.uid
+        && ownsIncoming();
+      allow delete: if false;
     }
 
     match /monthly_progress/{document} {
-      allow read, write: if true;
+      allow read: if ownsExisting();
+      allow create, update: if ownsIncoming();
+      allow delete: if false;
     }
 
-    match /personal-hydration/{document} {
-      allow read, write: if true;
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

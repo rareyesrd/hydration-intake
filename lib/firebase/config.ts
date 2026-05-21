@@ -5,12 +5,20 @@ import {
   type Analytics
 } from "firebase/analytics";
 import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  getAuth,
+  signInAnonymously,
+  type Auth,
+  type User
+} from "firebase/auth";
 
 import { env, hasFirebaseConfig } from "@/lib/env";
 
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let analytics: Analytics | null = null;
+let auth: Auth | null = null;
+let authUserPromise: Promise<User | null> | null = null;
 
 export function getFirebaseApp() {
   if (!hasFirebaseConfig) {
@@ -46,6 +54,38 @@ export function getFirebaseDb() {
   }
 
   return db;
+}
+
+export function getFirebaseAuth() {
+  const firebaseApp = getFirebaseApp();
+
+  if (!firebaseApp) {
+    return null;
+  }
+
+  if (!auth) {
+    auth = getAuth(firebaseApp);
+  }
+
+  return auth;
+}
+
+export async function getFirebaseUser() {
+  const firebaseAuth = getFirebaseAuth();
+
+  if (!firebaseAuth || typeof window === "undefined") {
+    return null;
+  }
+
+  if (firebaseAuth.currentUser) {
+    return firebaseAuth.currentUser;
+  }
+
+  authUserPromise ??= signInAnonymously(firebaseAuth)
+    .then((credential) => credential.user)
+    .catch(() => null);
+
+  return authUserPromise;
 }
 
 export async function getFirebaseAnalytics() {

@@ -8,7 +8,7 @@ import {
   type Firestore
 } from "firebase/firestore";
 
-import { getFirebaseDb } from "@/lib/firebase/config";
+import { getFirebaseDb, getFirebaseUser } from "@/lib/firebase/config";
 import { trackFirebaseEvent } from "@/services/firebase-analytics-service";
 import type {
   Achievement,
@@ -23,7 +23,6 @@ import type {
 } from "@/types/hydration";
 
 const COLLECTION = "personal-hydration";
-const DOCUMENT = "athlete-dashboard";
 const HYDRATION_LOGS = "hydration_logs";
 const DAILY_STATS = "daily_stats";
 const ACHIEVEMENTS = "achievements";
@@ -53,6 +52,7 @@ function toHydrationProfile(data: DocumentData | undefined): HydrationProfile | 
       days: data.days as Record<string, DailyHydration>,
       settings: { ...defaultSettings, ...data.settings },
       unlockedAchievements: data.unlockedAchievements ?? {},
+      ownerId: typeof data.ownerId === "string" ? data.ownerId : undefined,
       updatedAt: String(data.updatedAt ?? new Date().toISOString())
     };
   }
@@ -69,33 +69,45 @@ function toHydrationProfile(data: DocumentData | undefined): HydrationProfile | 
     },
     settings: defaultSettings,
     unlockedAchievements: {},
+    ownerId: undefined,
     updatedAt: new Date().toISOString()
   };
 }
 
-function dashboardDoc(db: Firestore) {
-  return doc(db, COLLECTION, DOCUMENT);
+function dashboardDoc(db: Firestore, ownerId: string) {
+  return doc(db, COLLECTION, ownerId);
+}
+
+function withOwner<T extends object>(payload: T, ownerId: string) {
+  return {
+    ...payload,
+    ownerId
+  };
 }
 
 export async function loadHydrationProfile() {
   const db = getFirebaseDb();
 
-  if (!db) {
+  const user = await getFirebaseUser();
+
+  if (!db || !user) {
     return null;
   }
 
-  const snapshot = await getDoc(dashboardDoc(db));
+  const snapshot = await getDoc(dashboardDoc(db, user.uid));
   return toHydrationProfile(snapshot.data());
 }
 
 export async function saveHydrationProfile(profile: HydrationProfile) {
   const db = getFirebaseDb();
 
-  if (!db) {
+  const user = await getFirebaseUser();
+
+  if (!db || !user) {
     return;
   }
 
-  await setDoc(dashboardDoc(db), profile, { merge: true });
+  await setDoc(dashboardDoc(db, user.uid), withOwner(profile, user.uid), { merge: true });
 }
 
 type SyncAnalyticsPayload = {
@@ -110,31 +122,47 @@ type SyncAnalyticsPayload = {
 export async function syncHydrationAnalytics(payload: SyncAnalyticsPayload) {
   const db = getFirebaseDb();
 
-  if (!db) {
+  const user = await getFirebaseUser();
+
+  if (!db || !user) {
     return;
   }
 
   const batch = writeBatch(db);
 
-  batch.set(dashboardDoc(db), payload.profile, { merge: true });
-  batch.set(doc(collection(db, HYDRATION_LOGS), payload.log.id), payload.log);
-  batch.set(doc(collection(db, DAILY_STATS), payload.dailyStats.date), payload.dailyStats, {
-    merge: true
-  });
-  batch.set(doc(collection(db, STREAKS), payload.streak.id), payload.streak, {
+  batch.set(dashboardDoc(db, user.uid), withOwner(payload.profile, user.uid), {
     merge: true
   });
   batch.set(
-    doc(collection(db, MONTHLY_PROGRESS), payload.monthlyProgress.month),
-    payload.monthlyProgress,
+    doc(collection(db, HYDRATION_LOGS), `${user.uid}_${payload.log.id}`),
+    withOwner(payload.log, user.uid)
+  );
+  batch.set(
+    doc(collection(db, DAILY_STATS), `${user.uid}_${payload.dailyStats.date}`),
+    withOwner(payload.dailyStats, user.uid),
+    {
+      merge: true
+    }
+  );
+  batch.set(
+    doc(collection(db, STREAKS), user.uid),
+    withOwner(payload.streak, user.uid),
+    {
+      merge: true
+    }
+  );
+  batch.set(
+    doc(collection(db, MONTHLY_PROGRESS), `${user.uid}_${payload.monthlyProgress.month}`),
+    withOwner(payload.monthlyProgress, user.uid),
     { merge: true }
   );
 
   payload.achievements?.forEach((achievement) => {
     batch.set(
-      doc(collection(db, ACHIEVEMENTS), achievement.id),
+      doc(collection(db, ACHIEVEMENTS), `${user.uid}_${achievement.id}`),
       {
         ...achievement,
+        ownerId: user.uid,
         unlockedAt: achievement.unlockedAt ?? new Date().toISOString()
       },
       { merge: true }

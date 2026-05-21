@@ -199,6 +199,7 @@ function getUnlockedAchievements(
 
 function buildProfileSnapshot(state: HydrationState): HydrationProfile {
   return {
+    ownerId: state.ownerId,
     goal: state.goal,
     days: state.days,
     settings: state.settings,
@@ -435,6 +436,7 @@ export const useHydrationStore = create<HydrationState>()(
   persist(
     (set, get) => ({
       goal: DAILY_GOAL,
+      ownerId: undefined,
       days: {
         [todayKey()]: createEmptyDay()
       },

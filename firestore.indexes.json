@@ -5,6 +5,10 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "ownerId",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "date",
           "order": "ASCENDING"
         },
@@ -18,6 +22,10 @@
       "collectionGroup": "daily_stats",
       "queryScope": "COLLECTION",
       "fields": [
+        {
+          "fieldPath": "ownerId",
+          "order": "ASCENDING"
+        },
         {
           "fieldPath": "completed",
           "order": "ASCENDING"

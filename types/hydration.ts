@@ -65,6 +65,7 @@ export type HydrationStats = {
 };
 
 export type HydrationProfile = {
+  ownerId?: string;
   goal: number;
   days: Record<string, DailyHydration>;
   settings: ReminderSettings;
@@ -73,6 +74,7 @@ export type HydrationProfile = {
 };
 
 export type FirestoreHydrationLog = {
+  ownerId?: string;
   id: string;
   date: string;
   timestamp: string;
@@ -85,6 +87,7 @@ export type FirestoreHydrationLog = {
 };
 
 export type FirestoreDailyStats = {
+  ownerId?: string;
   date: string;
   glassesConsumed: number;
   goal: number;
@@ -96,6 +99,7 @@ export type FirestoreDailyStats = {
 };
 
 export type FirestoreStreak = {
+  ownerId?: string;
   id: "current";
   currentStreak: number;
   bestStreak: number;
@@ -103,6 +107,7 @@ export type FirestoreStreak = {
 };
 
 export type FirestoreMonthlyProgress = {
+  ownerId?: string;
   month: string;
   totalGlasses: number;
   completedDays: number;
