@@ -1,0 +1,29 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /hydration_logs/{document} {
+      allow read, write: if true;
+    }
+
+    match /daily_stats/{document} {
+      allow read, write: if true;
+    }
+
+    match /achievements/{document} {
+      allow read, write: if true;
+    }
+
+    match /streaks/{document} {
+      allow read, write: if true;
+    }
+
+    match /monthly_progress/{document} {
+      allow read, write: if true;
+    }
+
+    match /personal-hydration/{document} {
+      allow read, write: if true;
+    }
+  }
+}
