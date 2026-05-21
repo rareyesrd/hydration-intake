@@ -44,7 +44,6 @@ const messages = [
 export function HydrationDashboard() {
   const mounted = useMounted();
   const { user } = useAuth();
-  const setSessionUser = useHydrationStore((state) => state.setSessionUser);
   const [now, setNow] = useState(() => new Date());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -56,7 +55,6 @@ export function HydrationDashboard() {
     (state) => state.unlockedAchievements
   );
   const activeAchievement = useHydrationStore((state) => state.activeAchievement);
-  const hydrateFromRemote = useHydrationStore((state) => state.hydrateFromRemote);
   const resetToday = useHydrationStore((state) => state.resetToday);
   const addGlass = useHydrationStore((state) => state.addGlass);
   const removeGlass = useHydrationStore((state) => state.removeGlass);
@@ -76,6 +74,9 @@ export function HydrationDashboard() {
   const completeOnboarding = useHydrationStore((state) => state.completeOnboarding);
   const dismissAchievement = useHydrationStore((state) => state.dismissAchievement);
   const isSyncing = useHydrationStore((state) => state.isSyncing);
+  const hasLoadedRemote = useHydrationStore((state) => state.hasLoadedRemote);
+  const remoteSyncStatus = useHydrationStore((state) => state.remoteSyncStatus);
+  const syncError = useHydrationStore((state) => state.syncError);
   const today = getHydrationDateKey();
   const day = useMemo(
     () => days[today] ?? { date: today, goal: 11, entries: [] },
@@ -92,16 +93,6 @@ export function HydrationDashboard() {
 
   useHydrationReminders();
   useThemePreference(settings.theme);
-
-  useEffect(() => {
-    setSessionUser(user?.uid ?? null);
-  }, [setSessionUser, user?.uid]);
-
-  useEffect(() => {
-    if (user) {
-      void hydrateFromRemote();
-    }
-  }, [hydrateFromRemote, user]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(new Date()), 60_000);
@@ -125,7 +116,9 @@ export function HydrationDashboard() {
     [stats.progress]
   );
 
-  if (!mounted) {
+  const isHydrationReady = !user || (hasLoadedRemote && remoteSyncStatus !== "loading");
+
+  if (!mounted || !isHydrationReady) {
     return (
       <div className="grid min-h-[70vh] place-items-center">
         <div className="h-28 w-28 animate-pulse rounded-full bg-cyan-300/20" />
@@ -277,8 +270,20 @@ export function HydrationDashboard() {
           <MetricCard
             icon={Waves}
             label="Sync state"
-            value={isSyncing ? "Saving" : "Ready"}
-            caption="Optimistic local updates with Firebase backup"
+            value={
+              syncError
+                ? "Error"
+                : isSyncing
+                  ? "Saving"
+                  : remoteSyncStatus === "ready"
+                    ? "Synced"
+                    : "Loading"
+            }
+            caption={
+              syncError
+                ? syncError
+                : "Firestore realtime sync across your devices"
+            }
           />
           <MetricCard
             icon={Zap}

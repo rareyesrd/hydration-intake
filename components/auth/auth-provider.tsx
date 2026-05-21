@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { User } from "firebase/auth";
 
+import { logHydrationSync } from "@/lib/hydration-sync-log";
 import {
   handleGoogleRedirectResult,
   listenToAuthState,
@@ -18,6 +19,7 @@ import {
   signInWithGoogle,
   signOutUser
 } from "@/services/auth-service";
+import { startHydrationSync, stopHydrationSync } from "@/services/hydration-sync";
 import { useHydrationStore } from "@/store/hydration-store";
 
 type AuthContextValue = {
@@ -45,17 +47,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      logHydrationSync("auth", "Auth state changed", {
+        uid: nextUser?.uid ?? null,
+        email: nextUser?.email ?? null
+      });
+
       setUser(nextUser);
       setIsLoading(false);
       useHydrationStore.getState().setSessionUser(nextUser?.uid ?? null);
 
       if (nextUser) {
+        try {
+          startHydrationSync(nextUser.uid);
+        } catch (error) {
+          useHydrationStore
+            .getState()
+            .failRemoteSync(
+              error instanceof Error
+                ? error.message
+                : "Failed to start hydration sync."
+            );
+        }
         void persistUserProfile(nextUser);
+        return;
       }
+
+      stopHydrationSync();
     });
 
     return () => {
       active = false;
+      stopHydrationSync();
       unsubscribe();
     };
   }, []);
@@ -71,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    stopHydrationSync();
     await signOutUser();
     setUser(null);
     useHydrationStore.getState().setSessionUser(null);
