@@ -109,6 +109,7 @@ export async function persistUserProfile(user: User) {
     ref,
     {
       ...profile,
+      userId: user.uid,
       updatedAt: serverTimestamp(),
       createdAt: snapshot.exists()
         ? snapshot.data().createdAt
