@@ -62,7 +62,7 @@ export function QuickAddForm() {
           Add
         </Button>
       </form>
-      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+      <div className="text-glass-label flex items-center gap-2">
         <Zap className="size-3.5 text-cyan-200" />
         Quick add presets
       </div>

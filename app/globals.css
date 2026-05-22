@@ -67,6 +67,32 @@ input {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Muted copy on glass cards — meets ~4.5:1 on #020617 (slate-400). */
+@layer utilities {
+  .text-glass-muted {
+    @apply text-slate-400;
+  }
+
+  .text-glass-caption {
+    @apply text-sm text-slate-400;
+  }
+
+  .text-glass-label {
+    @apply text-xs uppercase tracking-[0.18em] text-slate-400;
+  }
+
+  .text-glass-label-wide {
+    @apply text-xs uppercase tracking-[0.2em] text-slate-400;
+  }
+}
+
+html.light .text-glass-muted,
+html.light .text-glass-caption,
+html.light .text-glass-label,
+html.light .text-glass-label-wide {
+  @apply text-slate-600;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

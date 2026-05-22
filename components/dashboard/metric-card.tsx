@@ -24,7 +24,7 @@ export function MetricCard({ icon: Icon, label, value, caption }: MetricCardProp
         <div>
           <p className="text-sm text-slate-400">{label}</p>
           <p className="mt-1 text-2xl font-black text-white">{value}</p>
-          <p className="mt-1 text-sm text-slate-500">{caption}</p>
+          <p className="text-glass-caption mt-1">{caption}</p>
         </div>
       </CardContent>
     </Card>

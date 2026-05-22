@@ -49,7 +49,7 @@ export function PwaSettings() {
       </div>
 
       {lastFlushAt ? (
-        <p className="text-xs text-slate-500">Last sync flush: {new Date(lastFlushAt).toLocaleString()}</p>
+        <p className="text-glass-muted text-xs">Last sync flush: {new Date(lastFlushAt).toLocaleString()}</p>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
@@ -102,7 +102,7 @@ function StatusTile({
 }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+      <div className="text-glass-label flex items-center gap-2 font-semibold">
         <Icon className="size-3.5 text-cyan-200" />
         {label}
       </div>

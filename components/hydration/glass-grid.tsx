@@ -54,7 +54,7 @@ export function GlassGrid({ consumed, goal, onAdd, onRemove }: GlassGridProps) {
               <Droplet
                 className={cn(
                   "relative size-4 transition",
-                  filled ? "fill-cyan-950 text-cyan-950" : "text-slate-500"
+                  filled ? "fill-cyan-950 text-cyan-950" : "text-slate-400"
                 )}
               />
             </motion.button>

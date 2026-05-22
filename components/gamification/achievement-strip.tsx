@@ -69,7 +69,7 @@ export function AchievementStrip({
               <Icon className={color} />
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+              <p className="text-glass-label-wide">
                 {label}
               </p>
               <p className="text-xl font-bold text-white">{value}</p>

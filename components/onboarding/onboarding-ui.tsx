@@ -90,7 +90,7 @@ export function FieldGroup({
     <label className="block space-y-2">
       <span className="text-sm font-semibold text-cyan-100">{label}</span>
       {children}
-      {hint ? <span className="block text-xs text-slate-500">{hint}</span> : null}
+      {hint ? <span className="text-glass-muted block text-xs">{hint}</span> : null}
     </label>
   );
 }
@@ -126,4 +126,4 @@ export function PillToggle<T extends string>({
 }
 
 export const fieldClassName =
-  "w-full rounded-2xl border border-white/10 bg-white/[0.08] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-200/70 focus:ring-2 focus:ring-cyan-300/30";
+  "w-full rounded-2xl border border-white/10 bg-white/[0.08] px-4 py-3 text-white outline-none transition placeholder:text-slate-400 focus:border-cyan-200/70 focus:ring-2 focus:ring-cyan-300/30";

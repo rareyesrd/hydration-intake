@@ -222,7 +222,7 @@ export function HydrationDashboard() {
                 <div className="text-right">
                   <p className="text-sm text-slate-400">Remaining</p>
                   <p className="text-5xl font-black text-white">{stats.remaining}</p>
-                  <p className="text-sm text-slate-500">glasses to 11</p>
+                  <p className="text-glass-caption">glasses to 11</p>
                 </div>
               </div>
               <div>
@@ -230,7 +230,10 @@ export function HydrationDashboard() {
                   <span className="text-slate-400">Daily completion</span>
                   <span className="font-semibold text-cyan-100">{stats.progress}%</span>
                 </div>
-                <Progress value={stats.progress} />
+                <Progress
+                  value={stats.progress}
+                  label={`Daily hydration completion: ${stats.progress} percent`}
+                />
               </div>
               <AnimatePresence mode="wait">
                 <motion.p

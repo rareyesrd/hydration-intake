@@ -30,7 +30,14 @@ export function OnboardingProgress({ step, isSaving }: OnboardingProgressProps) 
         </span>
         <span className="text-cyan-100">{isSaving ? "Saving…" : labels[step - 1]}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-white/10">
+      <div
+        className="h-2 overflow-hidden rounded-full bg-white/10"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(progress)}
+        aria-label={`Onboarding progress: step ${step} of ${ONBOARDING_STEP_COUNT}, ${labels[step - 1]}`}
+      >
         <motion.div
           className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-emerald-300 to-cyan-200"
           initial={false}

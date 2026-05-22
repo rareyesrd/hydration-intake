@@ -231,7 +231,7 @@ function AnalyticsMetric({
             <Icon className="size-5 text-cyan-200" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
+            <p className="text-glass-label">{label}</p>
             <p className="mt-1 text-2xl font-black text-white">{value}</p>
             <p className="text-sm text-slate-400">{caption}</p>
           </div>
@@ -457,7 +457,10 @@ export function AnalyticsDashboard({ days, achievements }: AnalyticsDashboardPro
                     <span className="font-semibold text-white">{day.label}</span>
                     <span className="text-cyan-100">{day.glasses}/{day.goal}</span>
                   </div>
-                  <Progress value={day.completion} />
+                  <Progress
+                    value={day.completion}
+                    label={`${day.label}: ${day.glasses} of ${day.goal} glasses, ${day.completion} percent`}
+                  />
                 </div>
               )) : (
                 <p className="text-sm text-slate-400">Hydrate today to start building personal records.</p>

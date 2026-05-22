@@ -61,17 +61,17 @@ export function ReminderPanel({
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-2xl bg-white/[0.06] p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Expected</p>
+            <p className="text-glass-label">Expected</p>
             <p className="mt-2 text-2xl font-black text-white">
               {reminder.expectedGlasses}
             </p>
           </div>
           <div className="rounded-2xl bg-white/[0.06] p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Deficit</p>
+            <p className="text-glass-label">Deficit</p>
             <p className="mt-2 text-2xl font-black text-white">{reminder.deficit}</p>
           </div>
           <div className="rounded-2xl bg-white/[0.06] p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Next ping</p>
+            <p className="text-glass-label">Next ping</p>
             <p className="mt-2 text-2xl font-black text-white">{nextPing}m</p>
           </div>
         </div>
@@ -83,27 +83,28 @@ export function ReminderPanel({
               {reminder.forecastGlasses}/11
             </span>
           </div>
-          <Progress value={forecastProgress} />
+          <Progress
+            value={forecastProgress}
+            label={`Hydration forecast: ${reminder.forecastGlasses} of 11 glasses`}
+          />
           <p className="mt-3 text-sm text-slate-400">{reminder.forecastLabel}</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onEnableNotifications}
-            aria-label="Enable browser notifications"
-          >
-            <Clock />
+          <Button type="button" variant="secondary" onClick={onEnableNotifications}>
+            <Clock aria-hidden />
             {settings.browserNotificationsEnabled ? "Notifications on" : "Enable alerts"}
           </Button>
           <Button
             type="button"
             variant={settings.soundEnabled ? "default" : "secondary"}
             onClick={onToggleSound}
-            aria-label="Toggle gentle sound effect"
           >
-            {settings.soundEnabled ? <Volume2 /> : <VolumeX />}
+            {settings.soundEnabled ? (
+              <Volume2 aria-hidden />
+            ) : (
+              <VolumeX aria-hidden />
+            )}
             Gentle sound
           </Button>
         </div>

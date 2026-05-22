@@ -104,7 +104,7 @@ export function HydrationResultReveal({ target }: HydrationResultRevealProps) {
               <p className="mt-1 text-lg font-black text-cyan-100">
                 {mode.liters}L · {mode.glasses} glasses
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500">{mode.guidance}</p>
+              <p className="text-glass-muted mt-1 text-xs leading-relaxed">{mode.guidance}</p>
             </motion.div>
           ))}
         </div>
@@ -128,7 +128,7 @@ export function HydrationResultReveal({ target }: HydrationResultRevealProps) {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-white/[0.05] px-3 py-2">
-      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{label}</p>
+      <p className="text-glass-label-wide text-[10px]">{label}</p>
       <p className="text-lg font-black text-white">{value}</p>
     </div>
   );
