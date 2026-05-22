@@ -3,14 +3,20 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { CloudOff, RefreshCcw, Wifi } from "lucide-react";
 
+import { useMounted } from "@/hooks/use-mounted";
 import { getPwaConnectivityLabel, usePwaStore } from "@/store/pwa-store";
 
 export function PwaStatusBar() {
+  const mounted = useMounted();
   const isOnline = usePwaStore((state) => state.isOnline);
   const pendingSyncCount = usePwaStore((state) => state.pendingSyncCount);
   const label = getPwaConnectivityLabel({ isOnline, pendingSyncCount });
 
-  const show = !isOnline || pendingSyncCount > 0;
+  const show = mounted && (!isOnline || pendingSyncCount > 0);
+
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <AnimatePresence>

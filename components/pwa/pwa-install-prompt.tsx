@@ -5,10 +5,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Download, Smartphone, Sparkles, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useMounted } from "@/hooks/use-mounted";
 import { PWA_APP_NAME } from "@/lib/pwa/constants";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 
 export function PwaInstallPrompt() {
+  const mounted = useMounted();
   const {
     canInstall,
     isInstalled,
@@ -19,7 +21,7 @@ export function PwaInstallPrompt() {
   } = usePwaInstall();
   const [isInstalling, setIsInstalling] = useState(false);
 
-  const showBanner = canInstall && !isDismissed && !isInstalled;
+  const showBanner = mounted && canInstall && !isDismissed && !isInstalled;
 
   useEffect(() => {
     if (!installSuccess) {
@@ -91,7 +93,7 @@ export function PwaInstallPrompt() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {installSuccess ? (
+        {mounted && installSuccess ? (
           <motion.div
             className="fixed inset-x-4 bottom-[max(5.5rem,env(safe-area-inset-bottom))] z-[70] mx-auto max-w-sm rounded-2xl border border-emerald-300/30 bg-emerald-500/15 px-4 py-3 text-center text-sm font-semibold text-emerald-100 backdrop-blur-xl"
             initial={{ opacity: 0, y: 10 }}

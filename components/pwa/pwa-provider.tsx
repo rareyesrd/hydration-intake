@@ -22,8 +22,8 @@ export function PwaProvider({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <PwaStatusBar />
       {children}
+      <PwaStatusBar />
       <PwaInstallPrompt />
     </>
   );

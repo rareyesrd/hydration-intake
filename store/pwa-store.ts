@@ -17,7 +17,8 @@ type PwaState = {
 };
 
 export const usePwaStore = create<PwaState>()((set) => ({
-  isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
+  // Keep SSR and the first client render aligned; sync real status after mount.
+  isOnline: true,
   pendingSyncCount: 0,
   swReady: false,
   setOnline: (online) => set({ isOnline: online }),
