@@ -29,7 +29,9 @@ export function ReminderPanel({
   onEnableNotifications,
   onToggleSound
 }: ReminderPanelProps) {
-  const forecastProgress = Math.round((reminder.forecastGlasses / 11) * 100);
+  const forecastProgress = Math.round(
+    (reminder.forecastGlasses / reminder.goal) * 100
+  );
   const nextPing = Math.min(
     reminder.nextReminderMinutes,
     settings.reminderFrequencyMinutes
@@ -80,12 +82,12 @@ export function ReminderPanel({
           <div className="mb-3 flex items-center justify-between text-sm">
             <span className="text-slate-400">Hydration forecast</span>
             <span className="font-semibold text-cyan-100">
-              {reminder.forecastGlasses}/11
+              {reminder.forecastGlasses}/{reminder.goal}
             </span>
           </div>
           <Progress
             value={forecastProgress}
-            label={`Hydration forecast: ${reminder.forecastGlasses} of 11 glasses`}
+            label={`Hydration forecast: ${reminder.forecastGlasses} of ${reminder.goal} glasses`}
           />
           <p className="mt-3 text-sm text-slate-400">{reminder.forecastLabel}</p>
         </div>

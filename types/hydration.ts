@@ -42,6 +42,7 @@ export type HydrationPace = "ahead" | "on-track" | "behind" | "critical" | "comp
 
 export type HydrationReminder = {
   pace: HydrationPace;
+  goal: number;
   expectedGlasses: number;
   deficit: number;
   nextReminderMinutes: number;

@@ -486,6 +486,7 @@ export function calculateHydrationReminder(
   if (consumed >= day.goal) {
     return {
       pace: "complete",
+      goal: day.goal,
       expectedGlasses,
       deficit: 0,
       nextReminderMinutes: Math.max(120, day.goal * 12),
@@ -509,6 +510,7 @@ export function calculateHydrationReminder(
 
   return {
     pace,
+    goal: day.goal,
     expectedGlasses,
     deficit,
     nextReminderMinutes,
@@ -516,7 +518,7 @@ export function calculateHydrationReminder(
     forecastGlasses,
     forecastLabel:
       forecastGlasses >= day.goal
-        ? "On pace to finish all 11 glasses."
+        ? `On pace to finish all ${day.goal} glasses.`
         : `Forecasting ${forecastGlasses}/${day.goal} by bedtime.`
   };
 }
