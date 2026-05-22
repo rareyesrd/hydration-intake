@@ -19,10 +19,27 @@ html {
 }
 
 body {
-  min-height: 100vh;
+  min-height: 100dvh;
   background: #020617;
   color: white;
   font-family: var(--font-inter), system-ui, sans-serif;
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  overscroll-behavior-y: none;
+}
+
+.app-shell {
+  min-height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+@supports (-webkit-touch-callout: none) {
+  .app-shell {
+    min-height: -webkit-fill-available;
+  }
 }
 
 html.light,

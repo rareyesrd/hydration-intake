@@ -3,7 +3,14 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { AnimatedBackground } from "@/components/dashboard/animated-background";
+import { SerwistProvider } from "@/components/pwa/serwist-provider";
 import { Providers } from "@/app/providers";
+import {
+  PWA_APP_NAME,
+  PWA_DESCRIPTION,
+  PWA_SHORT_NAME,
+  PWA_THEME_COLOR
+} from "@/lib/pwa/constants";
 import "./globals.css";
 
 const inter = Inter({
@@ -20,27 +27,45 @@ const jetBrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Hydration Intake",
-    template: "%s | Hydration Intake"
+    default: PWA_APP_NAME,
+    template: `%s | ${PWA_SHORT_NAME}`
   },
-  description:
-    "A cinematic personal hydration tracker for one athlete targeting at least 11 glasses of water daily.",
-  applicationName: "Hydration Intake",
-  keywords: ["hydration", "athlete", "water tracker", "fitness"],
-  authors: [{ name: "Personal Athlete" }],
-  creator: "Personal Athlete",
+  description: PWA_DESCRIPTION,
+  applicationName: PWA_APP_NAME,
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: PWA_SHORT_NAME
+  },
+  formatDetection: {
+    telephone: false
+  },
+  keywords: ["hydration", "athlete", "water tracker", "fitness", "pwa"],
+  authors: [{ name: "Hydration Coach" }],
+  creator: "Hydration Coach",
+  icons: {
+    icon: [
+      { url: "/icons/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" }
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }]
+  },
   openGraph: {
-    title: "Hydration Intake",
-    description: "Track 11 daily glasses with a premium personal hydration dashboard.",
+    title: PWA_APP_NAME,
+    description: PWA_DESCRIPTION,
     type: "website"
   }
 };
 
 export const viewport: Viewport = {
-  themeColor: "#020617",
+  themeColor: PWA_THEME_COLOR,
   colorScheme: "dark",
   width: "device-width",
-  initialScale: 1
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover"
 };
 
 export default function RootLayout({
@@ -50,11 +75,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${inter.variable} ${jetBrainsMono.variable} antialiased`}>
-        <Providers>
-          <AnimatedBackground />
-          {children}
-        </Providers>
+      <head>
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+      </head>
+      <body
+        className={`${inter.variable} ${jetBrainsMono.variable} app-shell antialiased`}
+      >
+        <SerwistProvider swUrl="/sw.js">
+          <Providers>
+            <AnimatedBackground />
+            {children}
+          </Providers>
+        </SerwistProvider>
       </body>
     </html>
   );

@@ -19,6 +19,7 @@ import {
   signInWithGoogle,
   signOutUser
 } from "@/services/auth-service";
+import { resetOfflineQueueForSignOut } from "@/services/pwa-sync-service";
 import { startHydrationSync, stopHydrationSync } from "@/services/hydration-sync";
 import {
   startUserHydrationProfileSync,
@@ -107,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     stopHydrationSync();
     stopUserHydrationProfileSync();
+    resetOfflineQueueForSignOut();
     await signOutUser();
     setUser(null);
     useHydrationStore.getState().setSessionUser(null);

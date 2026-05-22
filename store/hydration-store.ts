@@ -4,10 +4,13 @@ import { create } from "zustand";
 import { format, subDays } from "date-fns";
 
 import { logHydrationSync, logHydrationSyncError } from "@/lib/hydration-sync-log";
+import { isAppOnline, isNetworkError } from "@/lib/pwa/network";
 import {
   saveHydrationProfile,
   syncHydrationAnalytics
 } from "@/services/hydration-service";
+import { enqueueHydrationSync } from "@/services/offline-hydration-queue";
+import { usePwaStore } from "@/store/pwa-store";
 import type {
   Achievement,
   ConsistencyPoint,
@@ -319,10 +322,22 @@ function buildMonthlyProgress(
 async function persistProfile(userId: string, profile: HydrationProfile, set: PartialSetter) {
   set({ isSyncing: true, syncError: null });
 
+  if (!isAppOnline()) {
+    set({ isSyncing: false, lastSyncedAt: new Date().toISOString() });
+    usePwaStore.getState().refreshPendingCount();
+    logHydrationSync("write", "Profile save deferred while offline");
+    return;
+  }
+
   try {
     await saveHydrationProfile(userId, profile);
     set({ isSyncing: false, lastSyncedAt: new Date().toISOString() });
   } catch (error) {
+    if (isNetworkError(error)) {
+      set({ isSyncing: false, lastSyncedAt: new Date().toISOString() });
+      return;
+    }
+
     const message =
       error instanceof Error ? error.message : "Failed to save hydration profile.";
     logHydrationSyncError("write", message, error);
@@ -347,19 +362,46 @@ async function persistHydrationAction(
     lastUpdatedAt: new Date().toISOString()
   };
 
+  const monthlyProgress = buildMonthlyProgress(profile.days);
+  const payload = {
+    profile,
+    log,
+    dailyStats,
+    streak,
+    monthlyProgress,
+    achievements
+  };
+
   set({ isSyncing: true, syncError: null });
 
-  try {
-    await syncHydrationAnalytics(userId, {
-      profile,
-      log,
-      dailyStats,
-      streak,
-      monthlyProgress: buildMonthlyProgress(profile.days),
-      achievements
+  if (!isAppOnline()) {
+    enqueueHydrationSync({ userId, ...payload });
+    usePwaStore.getState().refreshPendingCount();
+    set({
+      isSyncing: false,
+      lastSyncedAt: new Date().toISOString(),
+      syncError: null
     });
+    logHydrationSync("write", "Hydration action queued for offline sync", {
+      action: log.action
+    });
+    return;
+  }
+
+  try {
+    await syncHydrationAnalytics(userId, payload);
     set({ isSyncing: false, lastSyncedAt: new Date().toISOString() });
   } catch (error) {
+    if (isNetworkError(error)) {
+      enqueueHydrationSync({ userId, ...payload });
+      usePwaStore.getState().refreshPendingCount();
+      set({ isSyncing: false, lastSyncedAt: new Date().toISOString() });
+      logHydrationSync("write", "Network failure — queued hydration action", {
+        action: log.action
+      });
+      return;
+    }
+
     const message =
       error instanceof Error ? error.message : "Failed to sync hydration analytics.";
     logHydrationSyncError("write", message, error);
