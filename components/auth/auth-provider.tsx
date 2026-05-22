@@ -20,6 +20,12 @@ import {
   signOutUser
 } from "@/services/auth-service";
 import { startHydrationSync, stopHydrationSync } from "@/services/hydration-sync";
+import {
+  startUserHydrationProfileSync,
+  stopUserHydrationProfileSync
+} from "@/services/user-hydration-profile-sync";
+import { ensureUserHydrationDocument } from "@/services/user-hydration-profile-service";
+import { useHydrationProfileStore } from "@/store/hydration-profile-store";
 import { useHydrationStore } from "@/store/hydration-store";
 
 type AuthContextValue = {
@@ -59,25 +65,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (nextUser) {
         try {
           startHydrationSync(nextUser.uid);
+          startUserHydrationProfileSync(nextUser.uid);
         } catch (error) {
-          useHydrationStore
-            .getState()
-            .failRemoteSync(
-              error instanceof Error
-                ? error.message
-                : "Failed to start hydration sync."
-            );
+          const message =
+            error instanceof Error ? error.message : "Failed to start hydration sync.";
+          useHydrationStore.getState().failRemoteSync(message);
+          useHydrationProfileStore.getState().failRemoteSync(message);
         }
         void persistUserProfile(nextUser);
+        void ensureUserHydrationDocument(
+          nextUser.uid,
+          nextUser.displayName ?? "Athlete",
+          nextUser.email ?? "",
+          nextUser.photoURL ?? undefined
+        );
         return;
       }
 
       stopHydrationSync();
+      stopUserHydrationProfileSync();
     });
 
     return () => {
       active = false;
       stopHydrationSync();
+      stopUserHydrationProfileSync();
       unsubscribe();
     };
   }, []);
@@ -94,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     stopHydrationSync();
+    stopUserHydrationProfileSync();
     await signOutUser();
     setUser(null);
     useHydrationStore.getState().setSessionUser(null);

@@ -14,7 +14,7 @@ import { HydrationRing } from "@/components/hydration/hydration-ring";
 import { QuickAddForm } from "@/components/hydration/quick-add-form";
 import { ReminderPanel } from "@/components/hydration/reminder-panel";
 import { WaveOrb } from "@/components/hydration/wave-orb";
-import { CinematicOnboarding } from "@/components/onboarding/cinematic-onboarding";
+import { PremiumOnboardingWizard } from "@/components/onboarding/premium-onboarding-wizard";
 import { SettingsPanel } from "@/components/settings/settings-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,6 +24,7 @@ import { useDynamicCopy } from "@/hooks/use-dynamic-copy";
 import { useMounted } from "@/hooks/use-mounted";
 import { useThemePreference } from "@/hooks/use-theme-preference";
 import { useAuth } from "@/components/auth/auth-provider";
+import { useHydrationProfileStore } from "@/store/hydration-profile-store";
 import {
   calculateHydrationReminder,
   calculateHydrationHistory,
@@ -71,7 +72,8 @@ export function HydrationDashboard() {
   );
   const setTheme = useHydrationStore((state) => state.setTheme);
   const setUnits = useHydrationStore((state) => state.setUnits);
-  const completeOnboarding = useHydrationStore((state) => state.completeOnboarding);
+  const showOnboarding = useHydrationProfileStore((state) => state.needsOnboarding());
+  const profileHasLoaded = useHydrationProfileStore((state) => state.hasLoaded);
   const dismissAchievement = useHydrationStore((state) => state.dismissAchievement);
   const isSyncing = useHydrationStore((state) => state.isSyncing);
   const hasLoadedRemote = useHydrationStore((state) => state.hasLoadedRemote);
@@ -116,7 +118,11 @@ export function HydrationDashboard() {
     [stats.progress]
   );
 
-  const isHydrationReady = !user || (hasLoadedRemote && remoteSyncStatus !== "loading");
+  const isHydrationReady =
+    !user ||
+    (hasLoadedRemote &&
+      remoteSyncStatus !== "loading" &&
+      profileHasLoaded);
 
   if (!mounted || !isHydrationReady) {
     return (
@@ -133,12 +139,7 @@ export function HydrationDashboard() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
     >
-      <CinematicOnboarding
-        isOpen={!settings.hasCompletedOnboarding}
-        dailyGoal={goal}
-        animationIntensity={settings.animationIntensity}
-        onComplete={completeOnboarding}
-      />
+      <PremiumOnboardingWizard isOpen={showOnboarding} />
       <AchievementPopup
         achievement={activeAchievement}
         onDismiss={dismissAchievement}
