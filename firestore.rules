@@ -62,6 +62,20 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /fcm_tokens/{document} {
+      allow read: if ownsExisting();
+      allow create, update: if ownsIncoming();
+      allow delete: if ownsExisting();
+    }
+
+    match /notification_schedules/{userId} {
+      allow read: if signedIn() && userId == request.auth.uid && ownsExisting();
+      allow create, update: if signedIn()
+        && userId == request.auth.uid
+        && ownsIncoming();
+      allow delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

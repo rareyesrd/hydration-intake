@@ -7,7 +7,8 @@ const firebaseEnvSchema = z.object({
   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: z.string().optional(),
   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().optional(),
   NEXT_PUBLIC_FIREBASE_APP_ID: z.string().optional(),
-  NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: z.string().optional()
+  NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: z.string().optional(),
+  NEXT_PUBLIC_FIREBASE_VAPID_KEY: z.string().optional()
 });
 
 export const env = firebaseEnvSchema.parse({
@@ -20,7 +21,8 @@ export const env = firebaseEnvSchema.parse({
     process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID:
-    process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  NEXT_PUBLIC_FIREBASE_VAPID_KEY: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY
 });
 
 export const hasFirebaseConfig = Boolean(

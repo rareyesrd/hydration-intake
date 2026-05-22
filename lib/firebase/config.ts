@@ -1,14 +1,12 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
-import {
-  getAnalytics,
-  isSupported,
-  type Analytics
-} from "firebase/analytics";
+import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
 import { getFirestore, type Firestore } from "firebase/firestore";
+import { getAuth, type Auth } from "firebase/auth";
 import {
-  getAuth,
-  type Auth,
-} from "firebase/auth";
+  getMessaging,
+  isSupported as isMessagingSupported,
+  type Messaging
+} from "firebase/messaging";
 
 import { env, hasFirebaseConfig } from "@/lib/env";
 
@@ -16,6 +14,7 @@ let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let analytics: Analytics | null = null;
 let auth: Auth | null = null;
+let messaging: Messaging | null = null;
 
 export function getFirebaseApp() {
   if (!hasFirebaseConfig) {
@@ -71,6 +70,20 @@ export function getCurrentFirebaseUser() {
   const firebaseAuth = getFirebaseAuth();
 
   return firebaseAuth?.currentUser ?? null;
+}
+
+export async function getFirebaseMessaging() {
+  const firebaseApp = getFirebaseApp();
+
+  if (!firebaseApp || typeof window === "undefined") {
+    return null;
+  }
+
+  if (!messaging && (await isMessagingSupported())) {
+    messaging = getMessaging(firebaseApp);
+  }
+
+  return messaging;
 }
 
 export async function getFirebaseAnalytics() {
