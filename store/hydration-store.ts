@@ -81,6 +81,8 @@ type HydrationState = HydrationProfile & {
   setSessionUser: (userId: string | null) => void;
   beginRemoteSync: (userId: string) => void;
   applyRemoteProfile: (profile: HydrationProfile | null) => void;
+  applyEffectiveGoal: (goal: number) => void;
+  markOnboardingComplete: () => Promise<void>;
   failRemoteSync: (message: string) => void;
   clearRemoteSync: () => void;
   addGlass: (amount?: number) => Promise<void>;
@@ -100,10 +102,10 @@ type HydrationState = HydrationProfile & {
   reminder: (now?: Date) => HydrationReminder;
 };
 
-function createEmptyDay(date = todayKey()): DailyHydration {
+function createEmptyDay(date = todayKey(), goal = DAILY_GOAL): DailyHydration {
   return {
     date,
-    goal: DAILY_GOAL,
+    goal,
     entries: []
   };
 }
@@ -551,12 +553,15 @@ export const useHydrationStore = create<HydrationState>()((set, get) => ({
       updatedAt: profile.updatedAt
     });
 
+    const today = profile.days[todayKey()] ?? createEmptyDay();
+    const mergedToday = { ...today, goal: profile.goal };
+
     set({
       userId,
       goal: profile.goal,
       days: {
         ...profile.days,
-        [todayKey()]: profile.days[todayKey()] ?? createEmptyDay()
+        [todayKey()]: mergedToday
       },
       settings: profile.settings,
       unlockedAchievements: profile.unlockedAchievements,
@@ -565,6 +570,60 @@ export const useHydrationStore = create<HydrationState>()((set, get) => ({
       remoteSyncStatus: "ready",
       syncError: null
     });
+  },
+  applyEffectiveGoal: (goal) => {
+    const userId = get().userId;
+    const safeGoal = Math.min(24, Math.max(6, Math.round(goal)));
+    const today = todaysDay(get().days);
+
+    set({
+      goal: safeGoal,
+      days: {
+        ...get().days,
+        [todayKey()]: {
+          ...today,
+          goal: safeGoal,
+          completedAt:
+            dayTotal(today) >= safeGoal
+              ? today.completedAt ?? new Date().toISOString()
+              : undefined
+        }
+      },
+      updatedAt: new Date().toISOString()
+    });
+
+    logHydrationSync("state", `Effective hydration goal applied`, {
+      userId: userId ?? null,
+      goal: safeGoal
+    });
+
+    if (userId) {
+      void persistProfile(
+        userId,
+        buildProfileSnapshot({
+          ...get(),
+          goal: safeGoal,
+          days: get().days
+        } as HydrationState),
+        set
+      ).catch(() => null);
+    }
+  },
+  markOnboardingComplete: async () => {
+    const userId = get().userId;
+
+    if (!userId) {
+      return;
+    }
+
+    set({
+      settings: {
+        ...get().settings,
+        hasCompletedOnboarding: true
+      }
+    });
+
+    await persistProfile(userId, buildProfileSnapshot(get()), set);
   },
   failRemoteSync: (message) => {
     logHydrationSyncError("error", "Remote hydration sync failed", message);
