@@ -6,6 +6,7 @@ import { Bell, Gauge, Moon, Ruler, Settings2, Sun, Volume2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { HydrationProfileSettings } from "@/components/settings/hydration-profile-settings";
 import { cn } from "@/lib/utils";
 import type { ReminderSettings } from "@/types/hydration";
 
@@ -80,6 +81,7 @@ export function SettingsPanel({
               </div>
               <Card>
                 <CardContent className="grid gap-6">
+              <HydrationProfileSettings />
               <div>
                 <div className="flex items-center gap-2 text-sm font-semibold text-cyan-100">
                   <Gauge className="size-4" />
