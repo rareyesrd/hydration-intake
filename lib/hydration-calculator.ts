@@ -17,7 +17,6 @@ import {
 } from "@/lib/hydration-constants";
 import { GLASS_VOLUME_LITERS } from "@/types/athlete-hydration-profile";
 import type {
-  ActivityLevel,
   AthleteHydrationProfile,
   CalculatedHydrationTarget,
   ClimateType,
@@ -26,10 +25,8 @@ import type {
   HydrationDayMode,
   HydrationInsight,
   HydrationRecommendationLabel,
-  IntakeLevel,
   LifestyleFactors,
   PerformanceFocus,
-  PrimaryHydrationGoal,
   SweatLevel
 } from "@/types/athlete-hydration-profile";
 

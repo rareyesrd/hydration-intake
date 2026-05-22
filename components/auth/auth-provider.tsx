@@ -46,6 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    const fallbackTimer = window.setTimeout(() => {
+      if (active) {
+        setIsLoading(false);
+      }
+    }, 8000);
 
     void handleGoogleRedirectResult().catch(() => null);
 
@@ -61,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setUser(nextUser);
       setIsLoading(false);
+      window.clearTimeout(fallbackTimer);
       useHydrationStore.getState().setSessionUser(nextUser?.uid ?? null);
 
       if (nextUser) {
@@ -89,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       active = false;
+      window.clearTimeout(fallbackTimer);
       stopHydrationSync();
       stopUserHydrationProfileSync();
       unsubscribe();

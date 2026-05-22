@@ -34,7 +34,9 @@ export function HydrationProfileSettings() {
   const [localDraft, setLocalDraft] = useState<OnboardingDraft>(draft);
 
   useEffect(() => {
-    setLocalDraft(draft);
+    const frame = window.requestAnimationFrame(() => setLocalDraft(draft));
+
+    return () => window.cancelAnimationFrame(frame);
   }, [draft]);
 
   const liveTarget = useMemo(

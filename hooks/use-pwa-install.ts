@@ -22,15 +22,17 @@ export function usePwaInstall() {
       return;
     }
 
-    setIsDismissed(window.localStorage.getItem(INSTALL_DISMISS_KEY) === "1");
-    setInstallSuccess(window.sessionStorage.getItem(INSTALL_SUCCESS_KEY) === "1");
+    const frame = window.requestAnimationFrame(() => {
+      setIsDismissed(window.localStorage.getItem(INSTALL_DISMISS_KEY) === "1");
+      setInstallSuccess(window.sessionStorage.getItem(INSTALL_SUCCESS_KEY) === "1");
 
-    const standalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      ("standalone" in navigator &&
-        Boolean((navigator as Navigator & { standalone?: boolean }).standalone));
+      const standalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        ("standalone" in navigator &&
+          Boolean((navigator as Navigator & { standalone?: boolean }).standalone));
 
-    setIsInstalled(standalone);
+      setIsInstalled(standalone);
+    });
 
     const handleBeforeInstall = (event: Event) => {
       event.preventDefault();
@@ -50,6 +52,7 @@ export function usePwaInstall() {
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
       window.removeEventListener("appinstalled", handleInstalled);
+      window.cancelAnimationFrame(frame);
     };
   }, []);
 

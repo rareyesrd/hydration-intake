@@ -3,7 +3,6 @@
 import { create } from "zustand";
 
 import { getOfflineQueueCount } from "@/services/offline-hydration-queue";
-import { isAppOnline } from "@/lib/pwa/network";
 
 type PwaState = {
   isOnline: boolean;

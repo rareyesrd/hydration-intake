@@ -41,13 +41,29 @@ export async function handleGoogleRedirectResult() {
     return null;
   }
 
-  const result = await getRedirectResult(auth);
+  const result = await withTimeout(getRedirectResult(auth), 6000);
 
   if (result?.user) {
     await persistUserProfile(result.user);
   }
 
   return result?.user ?? null;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeout = new Promise<null>((resolve) => {
+    timeoutId = setTimeout(() => resolve(null), timeoutMs);
+  });
+
+  const result = await Promise.race([promise, timeout]);
+
+  if (timeoutId) {
+    clearTimeout(timeoutId);
+  }
+
+  return result as T | null;
 }
 
 export async function signInWithGoogle() {
