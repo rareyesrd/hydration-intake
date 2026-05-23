@@ -32,13 +32,18 @@ export type ReminderSettings = {
   reminderFrequencyMinutes: number;
   animationIntensity: "calm" | "balanced" | "cinematic";
   theme: "dark" | "light";
-  units: "glasses" | "ounces" | "milliliters";
+  units: "glasses" | "liters" | "ounces" | "milliliters";
   hasCompletedOnboarding: boolean;
   quietHoursStart: number;
   quietHoursEnd: number;
 };
 
-export type HydrationPace = "ahead" | "on-track" | "behind" | "critical" | "complete";
+export type HydrationPace =
+  | "ahead"
+  | "on-track"
+  | "behind"
+  | "critical"
+  | "complete";
 
 export type HydrationReminder = {
   pace: HydrationPace;

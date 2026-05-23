@@ -41,7 +41,12 @@ const intensities: ReminderSettings["animationIntensity"][] = [
   "cinematic"
 ];
 
-const units: ReminderSettings["units"][] = ["glasses", "ounces", "milliliters"];
+const units: ReminderSettings["units"][] = [
+  "glasses",
+  "liters",
+  "ounces",
+  "milliliters"
+];
 
 export function SettingsPanel({
   isOpen,
@@ -256,7 +261,12 @@ function SegmentedSetting<T extends string>({
         {icon}
         {label}
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div
+        className={cn(
+          "grid gap-2",
+          values.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"
+        )}
+      >
         {values.map((value) => (
           <button
             key={value}

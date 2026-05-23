@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, RotateCcw, Sparkles, Target, Waves, Zap } from "lucide-react";
+import {
+  Activity,
+  RotateCcw,
+  Sparkles,
+  Target,
+  Waves,
+  Zap
+} from "lucide-react";
 
 import { ProfileMenu } from "@/components/auth/profile-menu";
 import { AnalyticsDashboard } from "@/components/analytics/analytics-dashboard";
@@ -23,7 +30,11 @@ import { useHydrationReminders } from "@/hooks/use-hydration-reminders";
 import { useDynamicCopy } from "@/hooks/use-dynamic-copy";
 import { useMounted } from "@/hooks/use-mounted";
 import { useThemePreference } from "@/hooks/use-theme-preference";
-import { formatCupAmount } from "@/lib/utils/hydration-units";
+import {
+  formatHydrationAmount,
+  formatHydrationLabel,
+  hydrationUnitLabel
+} from "@/lib/utils/hydration-units";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useHydrationProfileStore } from "@/store/hydration-profile-store";
 import {
@@ -56,7 +67,9 @@ export function HydrationDashboard() {
   const unlockedAchievements = useHydrationStore(
     (state) => state.unlockedAchievements
   );
-  const activeAchievement = useHydrationStore((state) => state.activeAchievement);
+  const activeAchievement = useHydrationStore(
+    (state) => state.activeAchievement
+  );
   const resetToday = useHydrationStore((state) => state.resetToday);
   const addGlass = useHydrationStore((state) => state.addGlass);
   const removeGlass = useHydrationStore((state) => state.removeGlass);
@@ -73,9 +86,13 @@ export function HydrationDashboard() {
   );
   const setTheme = useHydrationStore((state) => state.setTheme);
   const setUnits = useHydrationStore((state) => state.setUnits);
-  const showOnboarding = useHydrationProfileStore((state) => state.needsOnboarding());
+  const showOnboarding = useHydrationProfileStore((state) =>
+    state.needsOnboarding()
+  );
   const profileHasLoaded = useHydrationProfileStore((state) => state.hasLoaded);
-  const dismissAchievement = useHydrationStore((state) => state.dismissAchievement);
+  const dismissAchievement = useHydrationStore(
+    (state) => state.dismissAchievement
+  );
   const isSyncing = useHydrationStore((state) => state.isSyncing);
   const hasLoadedRemote = useHydrationStore((state) => state.hasLoadedRemote);
   const remoteSyncStatus = useHydrationStore((state) => state.remoteSyncStatus);
@@ -90,7 +107,10 @@ export function HydrationDashboard() {
     [day, days, unlockedAchievements]
   );
   const history = useMemo(() => calculateHydrationHistory(days), [days]);
-  const reminder = useMemo(() => calculateHydrationReminder(day, now), [day, now]);
+  const reminder = useMemo(
+    () => calculateHydrationReminder(day, now),
+    [day, now]
+  );
   const copy = useDynamicCopy(stats, reminder);
   const firstName = user?.displayName?.split(" ")[0] ?? "Athlete";
 
@@ -115,15 +135,14 @@ export function HydrationDashboard() {
   }, [stats.progress]);
 
   const message = useMemo(
-    () => messages[Math.min(messages.length - 1, Math.floor(stats.progress / 28))],
+    () =>
+      messages[Math.min(messages.length - 1, Math.floor(stats.progress / 28))],
     [stats.progress]
   );
 
   const isHydrationReady =
     !user ||
-    (hasLoadedRemote &&
-      remoteSyncStatus !== "loading" &&
-      profileHasLoaded);
+    (hasLoadedRemote && remoteSyncStatus !== "loading" && profileHasLoaded);
 
   if (!mounted || !isHydrationReady) {
     return (
@@ -135,7 +154,7 @@ export function HydrationDashboard() {
 
   return (
     <motion.main
-      className="relative mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-10 text-slate-950 dark:text-white sm:px-6 lg:px-8"
+      className="relative mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pt-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] text-slate-950 sm:px-6 lg:px-8 dark:text-white"
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
@@ -152,11 +171,12 @@ export function HydrationDashboard() {
             <Sparkles className="size-4" />
             Welcome back, {firstName}
           </div>
-          <h1 className="mt-4 max-w-3xl text-4xl font-black leading-[0.98] text-slate-950 dark:text-white sm:text-5xl lg:text-6xl">
+          <h1 className="mt-4 max-w-3xl text-4xl leading-[0.98] font-black text-slate-950 sm:text-5xl lg:text-6xl dark:text-white">
             {copy.hero}
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-400">
-            {copy.caption} Your synced Google profile keeps every hydration record personal.
+            {copy.caption} Your synced Google profile keeps every hydration
+            record personal.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -215,6 +235,7 @@ export function HydrationDashboard() {
                 progress={stats.progress}
                 consumed={stats.consumed}
                 goal={day.goal}
+                unit={settings.units}
               />
             </div>
             <div className="relative flex flex-col justify-center gap-6">
@@ -223,15 +244,25 @@ export function HydrationDashboard() {
                 <div className="text-right">
                   <p className="text-sm text-slate-400">Remaining</p>
                   <p className="text-5xl font-black text-white">
-                    {formatCupAmount(stats.remaining)}
+                    {formatHydrationAmount(stats.remaining, settings.units)}
                   </p>
-                  <p className="text-glass-caption">glasses to {day.goal}</p>
+                  <p className="text-glass-caption">
+                    {hydrationUnitLabel(
+                      settings.units,
+                      Number(
+                        formatHydrationAmount(stats.remaining, settings.units)
+                      )
+                    )}{" "}
+                    to {formatHydrationLabel(day.goal, settings.units)}
+                  </p>
                 </div>
               </div>
               <div>
                 <div className="mb-3 flex items-center justify-between text-sm">
                   <span className="text-slate-400">Daily completion</span>
-                  <span className="font-semibold text-cyan-100">{stats.progress}%</span>
+                  <span className="font-semibold text-cyan-100">
+                    {stats.progress}%
+                  </span>
                 </div>
                 <Progress
                   value={stats.progress}
@@ -241,7 +272,7 @@ export function HydrationDashboard() {
               <AnimatePresence mode="wait">
                 <motion.p
                   key={message}
-                  className="rounded-3xl border border-white/10 bg-slate-950/30 p-5 text-lg font-medium leading-relaxed text-slate-100"
+                  className="rounded-3xl border border-white/10 bg-slate-950/30 p-5 text-lg leading-relaxed font-medium text-slate-100"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
@@ -264,9 +295,12 @@ export function HydrationDashboard() {
         <div className="grid gap-4">
           <MetricCard
             icon={Target}
-            label="Today's glasses"
-            value={formatCupAmount(stats.consumed)}
-            caption={`${formatCupAmount(stats.remaining)} left before recovery mode`}
+            label={`Today's ${hydrationUnitLabel(settings.units)}`}
+            value={formatHydrationAmount(stats.consumed, settings.units)}
+            caption={`${formatHydrationLabel(
+              stats.remaining,
+              settings.units
+            )} left before recovery mode`}
           />
           <MetricCard
             icon={Activity}

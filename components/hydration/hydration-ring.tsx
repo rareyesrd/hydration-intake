@@ -2,15 +2,25 @@
 
 import { motion } from "framer-motion";
 
-import { formatCupAmount } from "@/lib/utils/hydration-units";
+import {
+  formatHydrationAmount,
+  hydrationUnitLabel,
+  type HydrationDisplayUnit
+} from "@/lib/utils/hydration-units";
 
 type HydrationRingProps = {
   progress: number;
   consumed: number;
   goal: number;
+  unit: HydrationDisplayUnit;
 };
 
-export function HydrationRing({ progress, consumed, goal }: HydrationRingProps) {
+export function HydrationRing({
+  progress,
+  consumed,
+  goal,
+  unit
+}: HydrationRingProps) {
   const radius = 104;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (progress / 100) * circumference;
@@ -47,7 +57,13 @@ export function HydrationRing({ progress, consumed, goal }: HydrationRingProps) 
           transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
         />
         <defs>
-          <linearGradient id="hydrationGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient
+            id="hydrationGradient"
+            x1="0%"
+            y1="0%"
+            x2="100%"
+            y2="100%"
+          >
             <stop offset="0%" stopColor="#67e8f9" />
             <stop offset="45%" stopColor="#38bdf8" />
             <stop offset="100%" stopColor="#a7f3d0" />
@@ -55,13 +71,16 @@ export function HydrationRing({ progress, consumed, goal }: HydrationRingProps) 
         </defs>
       </svg>
       <div className="absolute text-center">
-        <p className="text-sm font-medium uppercase tracking-[0.26em] text-cyan-100/60">
+        <p className="text-sm font-medium tracking-[0.26em] text-cyan-100/60 uppercase">
           Today
         </p>
         <p className="mt-2 text-5xl font-black text-white">
-          {formatCupAmount(consumed)}
+          {formatHydrationAmount(consumed, unit)}
         </p>
-        <p className="text-sm text-slate-400">of {goal} glasses</p>
+        <p className="text-sm text-slate-400">
+          of {formatHydrationAmount(goal, unit)}{" "}
+          {hydrationUnitLabel(unit, Number(formatHydrationAmount(goal, unit)))}
+        </p>
       </div>
     </div>
   );
