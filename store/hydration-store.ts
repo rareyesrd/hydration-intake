@@ -5,6 +5,7 @@ import { format, subDays } from "date-fns";
 
 import { logHydrationSync, logHydrationSyncError } from "@/lib/hydration-sync-log";
 import { isAppOnline, isNetworkError } from "@/lib/pwa/network";
+import { normalizeCupAmount } from "@/lib/utils/hydration-units";
 import {
   saveHydrationProfile,
   syncHydrationAnalytics
@@ -695,7 +696,10 @@ export const useHydrationStore = create<HydrationState>()((set, get) => ({
     }
 
     const today = todaysDay(state.days);
-    const cappedAmount = Math.min(amount, Math.max(0, today.goal - dayTotal(today)));
+    const requestedAmount = normalizeCupAmount(amount);
+    const cappedAmount = normalizeCupAmount(
+      Math.min(requestedAmount, Math.max(0, today.goal - dayTotal(today)))
+    );
 
     if (cappedAmount <= 0) {
       return;

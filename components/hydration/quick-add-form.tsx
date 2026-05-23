@@ -2,16 +2,37 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Droplets, Plus, Zap } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import {
+  formatCupLabel,
+  formatLiterEquivalent,
+  toCupAmount
+} from "@/lib/utils/hydration-units";
 import { useHydrationStore } from "@/store/hydration-store";
 
-const customGlassSchema = z.object({
-  amount: z.coerce.number().int().min(1).max(6)
-});
+const inputUnits = ["cups", "liters", "ounces"] as const;
+
+const customGlassSchema = z
+  .object({
+    amount: z.coerce.number().positive("Enter a positive amount."),
+    unit: z.enum(inputUnits)
+  })
+  .superRefine(({ amount, unit }, context) => {
+    const cups = toCupAmount(amount, unit);
+
+    if (cups <= 0 || cups > 8) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Add between 0.1 and 8 cups at once.",
+        path: ["amount"]
+      });
+    }
+  });
 
 type CustomGlassForm = z.infer<typeof customGlassSchema>;
 
@@ -21,9 +42,13 @@ export function QuickAddForm() {
   const form = useForm<CustomGlassForm>({
     resolver: zodResolver(customGlassSchema),
     defaultValues: {
-      amount: 1
+      amount: 1,
+      unit: "cups"
     }
   });
+  const selectedUnit = useWatch({ control: form.control, name: "unit" });
+  const watchedAmount = useWatch({ control: form.control, name: "amount" });
+  const previewCups = toCupAmount(Number(watchedAmount), selectedUnit);
 
   const quickAdds = [1, 2, 3];
 
@@ -45,18 +70,43 @@ export function QuickAddForm() {
       </div>
       <form
         className="flex gap-3"
-        onSubmit={form.handleSubmit(async ({ amount }) => {
-          await addGlass(amount);
-          form.reset({ amount: 1 });
+        onSubmit={form.handleSubmit(async ({ amount, unit }) => {
+          await addGlass(toCupAmount(amount, unit));
+          form.reset({ amount: unit === "liters" ? 0.25 : 1, unit });
         })}
       >
-        <Input
-          type="number"
-          min={1}
-          max={6}
-          aria-label="Custom glasses"
-          {...form.register("amount")}
-        />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="grid grid-cols-3 gap-2">
+            {inputUnits.map((unit) => (
+              <button
+                key={unit}
+                type="button"
+                onClick={() => form.setValue("unit", unit, { shouldValidate: true })}
+                className={cn(
+                  "rounded-full border px-3 py-2 text-xs font-bold capitalize transition",
+                  selectedUnit === unit
+                    ? "border-cyan-200 bg-cyan-300 text-slate-950"
+                    : "border-white/10 bg-white/[0.06] text-slate-300"
+                )}
+              >
+                {unit}
+              </button>
+            ))}
+          </div>
+          <Input
+            type="number"
+            min={selectedUnit === "liters" ? 0.05 : 0.1}
+            max={selectedUnit === "liters" ? 2 : selectedUnit === "ounces" ? 64 : 8}
+            step={selectedUnit === "cups" ? 0.25 : 0.05}
+            aria-label="Custom hydration amount"
+            {...form.register("amount")}
+          />
+          <p className="text-xs text-slate-400">
+            {Number.isFinite(previewCups) && previewCups > 0
+              ? `${formatLiterEquivalent(previewCups)} fills ${formatCupLabel(previewCups)}. Partial 8oz cups stay partial.`
+              : "Enter cups, liters, or ounces."}
+          </p>
+        </div>
         <Button type="submit" variant="secondary" disabled={isSyncing}>
           <Plus />
           Add

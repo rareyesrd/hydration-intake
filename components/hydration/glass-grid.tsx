@@ -5,6 +5,7 @@ import { Droplet, Minus, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { cupFillRatio } from "@/lib/utils/hydration-units";
 
 type GlassGridProps = {
   consumed: number;
@@ -18,18 +19,23 @@ export function GlassGrid({ consumed, goal, onAdd, onRemove }: GlassGridProps) {
     <div className="space-y-4">
       <div className="grid grid-cols-6 gap-2 sm:grid-cols-11">
         {Array.from({ length: goal }, (_, index) => {
-          const filled = index < consumed;
+          const fillRatio = cupFillRatio(consumed, index);
+          const filled = fillRatio >= 1;
+          const active = fillRatio > 0;
+          const fillPercent = Math.round(fillRatio * 100);
 
           return (
             <motion.button
               key={index}
               type="button"
-              aria-label={`Glass ${index + 1} ${filled ? "complete" : "empty"}`}
-              onClick={index < consumed ? onRemove : onAdd}
+              aria-label={`Cup ${index + 1} ${
+                active ? `${fillPercent}% full` : "empty"
+              }`}
+              onClick={active ? onRemove : onAdd}
               whileTap={{ scale: 0.9 }}
               className={cn(
                 "group relative grid aspect-[0.72] place-items-center overflow-hidden rounded-b-2xl rounded-t-lg border transition",
-                filled
+                active
                   ? "border-cyan-200/50 bg-cyan-300/18 shadow-[0_0_24px_rgba(103,232,249,0.25)]"
                   : "border-white/10 bg-white/[0.045] hover:border-cyan-200/30 hover:bg-white/10"
               )}
@@ -37,11 +43,14 @@ export function GlassGrid({ consumed, goal, onAdd, onRemove }: GlassGridProps) {
               <motion.div
                 className="absolute inset-x-1 bottom-1 rounded-b-xl rounded-t-[100%] bg-gradient-to-t from-cyan-400 via-sky-300 to-emerald-200"
                 initial={false}
-                animate={{ height: filled ? "82%" : "8%", opacity: filled ? 1 : 0.22 }}
+                animate={{
+                  height: `${8 + fillRatio * 74}%`,
+                  opacity: active ? 1 : 0.22
+                }}
                 transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
               />
               <AnimatePresence>
-                {filled ? (
+                {active ? (
                   <motion.span
                     className="absolute size-7 rounded-full bg-white/25"
                     initial={{ scale: 0, opacity: 0.8 }}
@@ -54,7 +63,11 @@ export function GlassGrid({ consumed, goal, onAdd, onRemove }: GlassGridProps) {
               <Droplet
                 className={cn(
                   "relative size-4 transition",
-                  filled ? "fill-cyan-950 text-cyan-950" : "text-slate-400"
+                  filled
+                    ? "fill-cyan-950 text-cyan-950"
+                    : active
+                      ? "fill-cyan-200/70 text-cyan-950"
+                      : "text-slate-400"
                 )}
               />
             </motion.button>

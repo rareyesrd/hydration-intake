@@ -23,6 +23,7 @@ import { useHydrationReminders } from "@/hooks/use-hydration-reminders";
 import { useDynamicCopy } from "@/hooks/use-dynamic-copy";
 import { useMounted } from "@/hooks/use-mounted";
 import { useThemePreference } from "@/hooks/use-theme-preference";
+import { formatCupAmount } from "@/lib/utils/hydration-units";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useHydrationProfileStore } from "@/store/hydration-profile-store";
 import {
@@ -221,7 +222,9 @@ export function HydrationDashboard() {
                 <WaveOrb progress={stats.progress} />
                 <div className="text-right">
                   <p className="text-sm text-slate-400">Remaining</p>
-                  <p className="text-5xl font-black text-white">{stats.remaining}</p>
+                  <p className="text-5xl font-black text-white">
+                    {formatCupAmount(stats.remaining)}
+                  </p>
                   <p className="text-glass-caption">glasses to {day.goal}</p>
                 </div>
               </div>
@@ -262,8 +265,8 @@ export function HydrationDashboard() {
           <MetricCard
             icon={Target}
             label="Today's glasses"
-            value={`${stats.consumed}`}
-            caption={`${stats.remaining} left before recovery mode`}
+            value={formatCupAmount(stats.consumed)}
+            caption={`${formatCupAmount(stats.remaining)} left before recovery mode`}
           />
           <MetricCard
             icon={Activity}

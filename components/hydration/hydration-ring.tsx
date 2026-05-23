@@ -2,6 +2,8 @@
 
 import { motion } from "framer-motion";
 
+import { formatCupAmount } from "@/lib/utils/hydration-units";
+
 type HydrationRingProps = {
   progress: number;
   consumed: number;
@@ -56,7 +58,9 @@ export function HydrationRing({ progress, consumed, goal }: HydrationRingProps) 
         <p className="text-sm font-medium uppercase tracking-[0.26em] text-cyan-100/60">
           Today
         </p>
-        <p className="mt-2 text-5xl font-black text-white">{consumed}</p>
+        <p className="mt-2 text-5xl font-black text-white">
+          {formatCupAmount(consumed)}
+        </p>
         <p className="text-sm text-slate-400">of {goal} glasses</p>
       </div>
     </div>
